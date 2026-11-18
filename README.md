@@ -80,6 +80,8 @@ npm run dev
 
 ### 路线 A：Vercel（推荐，免费，无需服务器）
 
+> ⚠️ **部署前必做（否则部署成功但功能不全）**：确认你已经在 Supabase 后台的 **SQL Editor** 里执行过 `supabase/schema.sql`（建 `game_list` 表 + `game-covers` 存储桶）。如果没执行，搜索能用但"加入清单/写感想"会报错。执行方法见第二节第 5 步。
+
 1. 把项目推到 GitHub：在 GitHub 新建一个仓库，然后把本目录 `game-collector-server` 的内容推送上去。
    ```bash
    cd game-collector-server
