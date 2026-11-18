@@ -136,6 +136,60 @@ npm run dev
 
 ---
 
+## 四·五、部署到 Cloudflare Workers（国内裸连方案，和你朋友一致）
+
+> 你朋友 buttervote.com 的做法就是这套：用 **OpenNext** 把 Next.js 应用转换成 Cloudflare Worker 部署，所以国内能直连。Vercel 默认域名 `*.vercel.app` 在国内常被 DNS 污染，而 Cloudflare 不受影响。
+
+项目已经改造好 OpenNext 支持（依赖、`wrangler.jsonc`、`open-next.config.ts`、部署脚本都已就位）。
+
+### 方式一：Cloudflare Workers Builds（推荐，连 GitHub 自动构建）
+
+好处：构建在 Cloudflare 的 Linux 云端完成，**完全绕开 Windows 本地构建的兼容问题**；以后 `git push` 自动重新部署，和你朋友一样。
+
+1. 确认 GitHub 仓库 `ouyangju/game-collector` 已包含最新代码（含 `wrangler.jsonc`、`open-next.config.ts`）。
+2. 打开 https://dash.cloudflare.com → 左侧 **Workers & Pages** → **Create** → **Workers** → **Connect to Git（通过 Git 部署）** → 用 GitHub 登录并授权 → 选择 `ouyangju/game-collector` 仓库。
+3. 构建配置填写：
+   - **Build command**：`npm run build && npx opennextjs-cloudflare build`
+   - **Deploy command**：`npx opennextjs-cloudflare deploy`
+   - **Root directory**：留空（项目就在仓库根目录）
+4. 在 **Environment variables**（构建和运行时都要填）添加 4 个变量，和 `.env.local` 完全一致：
+   `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`BANGUMI_UA`。
+5. 点 **Save and Deploy**，等 2–5 分钟。成功后会给你 `https://game-collector.<你的子域>.workers.dev` 网址。
+6. （可选）绑定自己的域名：Worker → **Settings → Domains & Routes → Custom Domain**，添加你的域名，Cloudflare 会自动配好 DNS 和证书。
+
+### 方式二：本地命令行部署
+
+> ⚠️ Windows 原生环境下 OpenNext 构建可能因 WASM 文件名含 `?module` 而失败。若失败请改用方式一，或用 WSL / GitHub Codespaces。
+
+```bash
+# 1. 先登录 Cloudflare（会打开浏览器授权）
+npx wrangler login
+
+# 2. 创建 .dev.vars（本地 Workers 用的环境变量），内容与 .env.local 相同
+Copy-Item .env.local .dev.vars
+
+# 3. 本地预览（可选）
+npm run preview:cf
+
+# 4. 构建并部署
+npm run deploy:cf
+```
+
+线上环境变量在 Cloudflare 后台设置：Worker → **Settings → Variables and Secrets** → 添加那 4 个变量（`service_role` 这类密钥勾选 Secret）。
+
+### 两种方案对比
+
+| | Vercel（当前） | Cloudflare Workers（推荐） |
+|---|---|---|
+| 国内裸连 | ❌ 默认域名被污染 | ✅ 可直连 |
+| 代码 | 同一份 | 同一份（已兼容两者） |
+| 数据库/图片 | Supabase（海外，国内可连） | 同左 |
+| 自动部署 | git push | git push |
+
+你朋友能裸连的“秘密”就是这一层：换个不受污染的托管网络。代码、数据库、图片方案都不用变。
+
+---
+
 ## 五、项目结构
 
 ```
