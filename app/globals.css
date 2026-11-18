@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cream: #fff8e8;
+  --cream-2: #fffcf4;
+  --butter: #fde3a7;
+  --butter-line: #eed8aa;
+  --ink: #3b2a1e;
+  --muted: #907764;
+  --primary: #d98841;
+  --primary-dark: #b25e1e;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(900px 420px at 8% -8%, #ffeccb 0%, rgba(255, 236, 203, 0) 60%),
+    radial-gradient(800px 420px at 100% 0%, #fff0d8 0%, rgba(255, 240, 216, 0) 55%),
+    var(--cream);
+  min-height: 100dvh;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-butter-2 bg-white/85 shadow-card backdrop-blur-sm;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition;
+    @apply bg-primary text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-butter-2 bg-cream-2 px-4 py-2.5 text-sm font-medium text-primary-dark transition hover:bg-butter/40 disabled:opacity-50;
+  }
+  .input {
+    @apply w-full rounded-xl border border-butter-2 bg-cream-2 px-4 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-butter/50;
+  }
+}
+
+* { box-sizing: border-box; }
+img { display: block; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(217, 136, 65, .55);
+  outline-offset: 2px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 22px; height: 22px; border: 3px solid var(--butter); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fadein { animation: fadein .25s ease; }
+
+.star-on { color: #e8912f; }
+.star-off { color: #d8c6a6; }
+
+.thought-box {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
