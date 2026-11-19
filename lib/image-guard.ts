@@ -10,7 +10,7 @@ export function isValidBangumiCover(rawUrl: string): boolean {
     if (u.search && !/^\?r=\d{1,16}$/.test(u.search)) return false;
     if (u.hostname !== "lain.bgm.tv") return false;
     // 封面路径形如 /pic/cover/l/xx/xx/xxxx.jpg，可选 /r/窄宽度 前缀
-    if (!/^\/(?:r\/\d{1,4})?\/pic\/cover\/[\w/-]+\.(?:jpe?g|png|webp)$/i.test(u.pathname)) return false;
+    if (!/^\/(?:r\/\d{1,4}\/)?pic\/cover\/[\w/-]+\.(?:jpe?g|png|webp)$/i.test(u.pathname)) return false;
     return true;
   } catch {
     return false;
