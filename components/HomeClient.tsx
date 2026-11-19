@@ -30,14 +30,25 @@ function Stars({ value, onChange }: { value: number | null; onChange?: (n: numbe
   );
 }
 
+// Bangumi 图床(lain.bgm.tv)在国内浏览器直连不稳定，改走服务端缩略图代理；
+// Supabase 公开桶地址本身可直连，保持原样。这样修复前存入的老数据也能正常显示。
+function proxiedCover(src: string | null): string | null {
+  if (!src) return null;
+  if (src.includes("lain.bgm.tv")) {
+    return `/api/games/thumbnail?url=${encodeURIComponent(src)}`;
+  }
+  return src;
+}
+
 function Cover({ src, alt, className }: { src: string | null; alt: string; className?: string }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
+  const displaySrc = proxiedCover(src);
   return (
     <div className={`relative flex items-center justify-center overflow-hidden bg-[#FFF3DA] ${className || ""}`}>
-      {!failed && src ? (
+      {!failed && displaySrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-full w-full object-cover" />
+        <img src={displaySrc} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-full w-full object-cover" />
       ) : (
         <span className="text-3xl text-primary/25">🎮</span>
       )}
