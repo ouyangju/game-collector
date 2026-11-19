@@ -15,7 +15,7 @@ export type SessionUser = {
   role: "user" | "admin";
 };
 
-export function isAdmin(user: SessionUser | null): boolean {
+export function isAdmin(user: SessionUser | null): user is SessionUser & { role: "admin" } {
   return user?.role === "admin";
 }
 

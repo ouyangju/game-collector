@@ -7,6 +7,11 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onSelect: (hit: GameHit) => void | Promise<void>;
+  // 多选模式：选择后弹窗保持打开，可连续添加多个选项（用于创建投票）
+  multiple?: boolean;
+  selectedIds?: number[];
+  title?: string;
+  hint?: string;
 };
 
 // 缩略图走自家服务端代理（返回图片二进制）；失败时回退到原始 Bangumi 地址
@@ -15,7 +20,7 @@ function coverCandidates(hit: GameHit): string[] {
   return [local, hit.cover];
 }
 
-function ResultCard({ hit, disabled, onSelect }: { hit: GameHit; disabled: boolean; onSelect: () => void }) {
+function ResultCard({ hit, disabled, selected, onSelect }: { hit: GameHit; disabled: boolean; selected: boolean; onSelect: () => void }) {
   const candidates = coverCandidates(hit);
   const [idx, setIdx] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -25,8 +30,8 @@ function ResultCard({ hit, disabled, onSelect }: { hit: GameHit; disabled: boole
     <div className="flex flex-col overflow-hidden rounded-xl border border-butter-2 bg-white/70 transition hover:bg-butter/20">
       <button
         type="button"
-        aria-label={`选择 ${title}`}
-        disabled={disabled}
+        aria-label={selected ? `${title} 已添加` : `选择 ${title}`}
+        disabled={disabled || selected}
         onClick={onSelect}
         className="flex flex-1 flex-col text-left disabled:opacity-50"
       >
@@ -75,15 +80,15 @@ function ResultCard({ hit, disabled, onSelect }: { hit: GameHit; disabled: boole
         >
           在 Bangumi 查看 ↗
         </a>
-        <button type="button" disabled={disabled} onClick={onSelect} className="text-xs font-medium text-primary-dark hover:underline disabled:opacity-50">
-          选择
+        <button type="button" disabled={disabled || selected} onClick={onSelect} className="text-xs font-medium text-primary-dark hover:underline disabled:opacity-50">
+          {selected ? "已添加 ✓" : "选择"}
         </button>
       </div>
     </div>
   );
 }
 
-export default function SearchDialog({ open, onClose, onSelect }: Props) {
+export default function SearchDialog({ open, onClose, onSelect, multiple = false, selectedIds = [], title, hint }: Props) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [data, setData] = useState<SearchResponse | null>(null);
@@ -159,8 +164,8 @@ export default function SearchDialog({ open, onClose, onSelect }: Props) {
         <div className="border-b border-butter-2 bg-white/70 px-4 py-3 sm:px-5 sm:py-4">
           <div className="mb-3 flex items-start justify-between">
             <div className="min-w-0">
-              <h2 className="text-lg font-medium">搜索游戏封面</h2>
-              <p className="text-xs text-muted">来自 Bangumi 游戏库，搜索后选择封面加入清单</p>
+              <h2 className="text-lg font-medium">{title || "搜索游戏封面"}</h2>
+              <p className="text-xs text-muted">{hint || "来自 Bangumi 游戏库，搜索后选择封面加入清单"}</p>
             </div>
             <button type="button" onClick={onClose} aria-label="关闭" className="shrink-0 rounded-lg px-2 py-1 text-muted hover:bg-butter/30 hover:text-ink">✕</button>
           </div>
@@ -184,7 +189,11 @@ export default function SearchDialog({ open, onClose, onSelect }: Props) {
               {busy ? <span className="spinner !h-4 !w-4 !border-2" /> : "搜索"}
             </button>
           </form>
-          <p className="mt-2 text-xs text-muted">中文名会自动同时搜索简体与繁体；也可尝试日文名或英文名。</p>
+          <p className="mt-2 text-xs text-muted">
+            {multiple
+              ? "可连续选择多个游戏作为投票选项，选完后点右上角关闭。中文名会同时搜索简体与繁体。"
+              : "中文名会自动同时搜索简体与繁体；也可尝试日文名或英文名。"}
+          </p>
         </div>
 
         <div className="min-h-[200px] flex-1 overflow-y-auto p-3 sm:p-5" aria-live="polite" aria-busy={busy}>
@@ -208,7 +217,13 @@ export default function SearchDialog({ open, onClose, onSelect }: Props) {
             <>
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
                 {data.items.map((hit) => (
-                  <ResultCard key={hit.id} hit={hit} disabled={picking !== null} onSelect={() => void handleSelect(hit)} />
+                  <ResultCard
+                    key={hit.id}
+                    hit={hit}
+                    disabled={picking !== null}
+                    selected={multiple && selectedIds.includes(hit.id)}
+                    onSelect={() => void handleSelect(hit)}
+                  />
                 ))}
               </div>
               {data.hasMore && page < 20 ? (

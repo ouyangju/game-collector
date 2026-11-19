@@ -70,3 +70,54 @@ export type EntriesResponse = {
   items: Entry[];
   user: SessionUser | null;
 };
+
+// ===== 活动 / 投票 =====
+
+// 投票人（仅管理员可见）
+export type PollVoter = {
+  user_id: string;
+  nickname: string;
+  created_at: string;
+};
+
+// 投票选项：带票数统计；voters 字段仅管理员身份下返回
+export type PollOption = {
+  id: number;
+  poll_id: number;
+  subject_id: number;
+  title: string;
+  cover: string | null;
+  cover_source: string | null;
+  platform: string | null;
+  position: number;
+  vote_count: number;
+  voters?: PollVoter[];
+};
+
+// 一个投票；status 由服务端按当前时间判定
+export type Poll = {
+  id: number;
+  title: string;
+  created_by: string | null;
+  creator_name: string;
+  created_at: string;
+  ends_at: string;
+  status: "active" | "ended";
+  options: PollOption[];
+  total_votes: number;
+  my_vote_option_id: number | null;
+};
+
+export type PollsResponse = {
+  items: Poll[];
+  user: SessionUser | null;
+};
+
+// 管理员创建投票时提交的单个选项
+export type PollOptionInput = {
+  subject_id: number;
+  title: string;
+  cover: string | null;
+  cover_source: string | null;
+  platform: string | null;
+};

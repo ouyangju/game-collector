@@ -35,12 +35,13 @@ Supabase 提供 Postgres 数据库 + 图片存储，免费层对个人项目足�
    - `Project URL` → 填到 `.env.local` 的 `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY`（**保密，只在服务端用**）
-5. 左侧 **SQL Editor → New query**，把本仓库 `supabase/schema.sql` 全文粘贴进去，点 **Run**。看到成功提示即可（建账户表/清单表/点赞表/评论表 + 策略 + `game-covers` 桶）。
+5. 左侧 **SQL Editor → New query**，把本仓库 `supabase/schema.sql` 全文粘贴进去，点 **Run**。看到成功提示即可（建账户表/清单表/点赞表/评论表/投票三表 + 策略 + `game-covers` 桶）。
 6. 左侧 **Storage**，确认出现 `game-covers` 桶，且是 Public。
 
 > ⚠️ **已有数据库升级（重要）**：如果你的 Supabase 里已经跑过旧版脚本（已有一批清单数据），**不要重新跑新版 `schema.sql`**。按顺序增量执行：
 > 1. `supabase/migration-v2.sql`（加 `users`/`likes`/`comments` 表、给 `game_list` 加 `user_id` 列）—— 若已执行过可跳过；
-> 2. `supabase/migration-v3.sql`（加 `users.role` 管理员角色、`site_settings` 头图/公告表）—— **本次新增，必须执行**。
+> 2. `supabase/migration-v3.sql`（加 `users.role` 管理员角色、`site_settings` 头图/公告表）—— 若已执行过可跳过；
+> 3. `supabase/migration-v4.sql`（加 `polls`/`poll_options`/`poll_votes` 投票三表）—— **新增投票功能，必须执行**。
 >
 > 全都是增量语句、可重复执行，不会破坏已有数据。旧数据在账号首次登录时会自动过户到该账号。
 
@@ -84,8 +85,13 @@ npm run dev
 7. 给别人的帖子点赞（再点一次取消）、发表评论（自己的评论可删除）。
 8. 用管理员账户（`.env.local` 里 `ADMIN_USERNAME` 指定的那个）登录 → 首页头图下方出现「✎ 编辑头图与公告」按钮 → 可上传头图、修改顶部公告语，保存后所有人生效。
 9. 另一台设备/浏览器打开同一地址，用不同账户名登录 → 能看到彼此的清单并互动。
+10. 切到「🗳️ 活动」→ 管理员点「＋ 新建投票」→ 填标题、选持续时间、从 Bangumi 搜索添加至少两个游戏选项 → 创建。
+11. 任意登录用户点选项右侧「投票」→ 投票后立即看到票数与百分比；再点其他选项不会重复计票（一人一票）。
+12. 管理员在投票卡片底部点「查看投票明细」→ 可看到每个选项分别是谁投的；「往期投票」里可查看所有已截止的投票结果，管理员还可删除投票。
 
-> **手机端**：页面已做响应式适配——顶栏、头图、清单卡片、群友广场的月份标签（可横向滑动）、弹窗都针对窄屏优化，直接用手机浏览器打开即可。
+> **投票规则**：一人一票（同一投票内不可重复投票、不可改票）；投票进行中，未投票的普通用户只看到选项、不显示票数；投过票后或投票截止后才显示得票数与比例；投票人明细仅管理员可见。持续时间从创建时刻算起，到点自动转入「往期投票」。
+
+> **手机端**：页面已做响应式适配——顶栏、头图、清单卡片、群友广场的月份标签（可横向滑动）、活动投票卡片、弹窗都针对窄屏优化，直接用手机浏览器打开即可。
 
 >  sessions 用 `SUPABASE_SERVICE_ROLE_KEY` 派生密钥做 HMAC 签名，存在 httpOnly Cookie 里；密码用 scrypt 加盐哈希，服务端不存明文。账户表对匿名角色完全不开放，密码哈希不会泄露。
 
@@ -218,13 +224,16 @@ game-collector-server/
 │   ├── api/comments/route.ts       # 评论的增删查
 │   ├── api/settings/route.ts       # 站点设置的读取(公开)/写入(仅管理员)
 │   ├── api/settings/upload/route.ts# 管理员上传头图→转存 Supabase→写入设置
+│   ├── api/polls/route.ts          # 投票列表/创建(管理员)/删除(管理员)
+│   ├── api/polls/vote/route.ts     # 投票（需登录，一人一票，校验截止时间）
 │   ├── api/games/search/route.ts   # 服务端代理 Bangumi 游戏搜索（type=4），带12分钟缓存
 │   ├── api/games/image/route.ts    # 抓图→校验→转存 Supabase，返回公开URL
 │   ├── api/games/thumbnail/route.ts# 抓图→返回二进制，供搜索结果即时展示
 │   ├── globals.css / layout.tsx / page.tsx
 ├── components/
-│   ├── HomeClient.tsx              # 主界面：登录/头图公告/清单/广场/点赞评论 + 移动端适配
-│   ├── SearchDialog.tsx            # 搜索弹窗（网格结果、缩略图回退、加载更多）
+│   ├── HomeClient.tsx              # 主界面：登录/头图公告/清单/广场/活动 + 移动端适配
+│   ├── EventsPanel.tsx             # 活动模块：投票/结果比例/管理员明细/往期/创建投票
+│   ├── SearchDialog.tsx            # 搜索弹窗（网格结果、缩略图回退、加载更多、多选模式）
 │   └── identity.ts                 # 本地 owner_key（用于旧数据过户识别）
 ├── lib/
 │   ├── auth.ts                     # 密码哈希(scrypt)、HMAC 签名会话、当前用户、isAdmin
@@ -235,7 +244,8 @@ game-collector-server/
 └── supabase/
     ├── schema.sql                  # 全新安装：建表 + RLS + 存储桶
     ├── migration-v2.sql            # 升级：账户/点赞/评论 + 旧数据过户
-    └── migration-v3.sql            # 升级：管理员角色(role) + 站点设置(site_settings)
+    ├── migration-v3.sql            # 升级：管理员角色(role) + 站点设置(site_settings)
+    └── migration-v4.sql            # 升级：活动投票（polls/poll_options/poll_votes + RLS）
 ```
 
 ## 六、和你朋友方案的对应关系

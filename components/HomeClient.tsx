@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SearchDialog from "./SearchDialog";
+import EventsPanel from "./EventsPanel";
 import { avatarColor, getOwnerKey } from "./identity";
 import type {
   Comment,
@@ -11,7 +12,7 @@ import type {
   SiteSettings,
 } from "@/lib/types";
 
-type Tab = "mine" | "square";
+type Tab = "mine" | "square" | "events";
 type SortBy = "time" | "likes";
 
 const DEFAULT_SETTINGS: SiteSettings = {
@@ -655,8 +656,9 @@ export default function HomeClient() {
         ) : null}
 
         <div className="mb-6 flex w-full rounded-full border border-butter-2 bg-cream-2 p-1 sm:inline-flex sm:w-auto">
-          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition sm:flex-none sm:px-5 ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>📚 我的清单</button>
-          <button type="button" onClick={() => setTab("square")} className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition sm:flex-none sm:px-5 ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
+          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>📚 我的清单</button>
+          <button type="button" onClick={() => setTab("square")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
+          <button type="button" onClick={() => setTab("events")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "events" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗳️ 活动</button>
         </div>
 
         {tab === "mine" ? (
@@ -705,6 +707,8 @@ export default function HomeClient() {
               )}
             </section>
           </div>
+        ) : tab === "events" ? (
+          <EventsPanel me={me} admin={admin} onLogin={() => setLoginOpen(true)} />
         ) : (
           <section className="card fadein p-4 sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">

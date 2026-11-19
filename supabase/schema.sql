@@ -122,3 +122,53 @@ with check (bucket_id = 'game-covers');
 drop policy if exists covers_update on storage.objects;
 create policy covers_update on storage.objects for update to authenticated, anon
 using (bucket_id = 'game-covers') with check (bucket_id = 'game-covers');
+
+-- 8) 活动 / 投票模块
+--    投票主表：标题 + 持续时间（ends_at）；管理员通过服务端 API 创建/删除
+create table if not exists public.polls (
+  id           bigint generated always as identity primary key,
+  title        text not null,
+  created_by   uuid references public.users(id) on delete set null,
+  creator_name text not null default '',
+  created_at   timestamptz not null default now(),
+  ends_at      timestamptz not null
+);
+create index if not exists polls_ends_at_idx on public.polls (ends_at);
+create index if not exists polls_created_at_idx on public.polls (created_at);
+alter table public.polls enable row level security;
+grant select on table public.polls to anon, authenticated;
+revoke insert, update, delete on table public.polls from anon, authenticated;
+drop policy if exists polls_read on public.polls;
+create policy polls_read on public.polls for select to anon, authenticated using (true);
+
+-- 9) 投票选项：每个选项是一款 Bangumi 游戏，数量不设上限，删除投票时级联删除
+create table if not exists public.poll_options (
+  id           bigint generated always as identity primary key,
+  poll_id      bigint not null references public.polls(id) on delete cascade,
+  subject_id   integer not null,
+  title        text not null,
+  cover        text,
+  cover_source text,
+  platform     text,
+  position     integer not null default 0
+);
+create index if not exists poll_options_poll_idx on public.poll_options (poll_id, position);
+alter table public.poll_options enable row level security;
+grant select on table public.poll_options to anon, authenticated;
+revoke insert, update, delete on table public.poll_options from anon, authenticated;
+drop policy if exists poll_options_read on public.poll_options;
+create policy poll_options_read on public.poll_options for select to anon, authenticated using (true);
+
+-- 10) 投票记录：一人一票（同一投票内）；投票人身份不对前台开放，仅服务端按管理员身份返回
+create table if not exists public.poll_votes (
+  id         bigint generated always as identity primary key,
+  poll_id    bigint not null references public.polls(id) on delete cascade,
+  option_id  bigint not null references public.poll_options(id) on delete cascade,
+  user_id    uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (poll_id, user_id)
+);
+create index if not exists poll_votes_poll_idx on public.poll_votes (poll_id);
+create index if not exists poll_votes_option_idx on public.poll_votes (option_id);
+alter table public.poll_votes enable row level security;
+revoke all on table public.poll_votes from anon, authenticated;
