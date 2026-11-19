@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SearchDialog from "./SearchDialog";
 import EventsPanel from "./EventsPanel";
-import { avatarColor, getOwnerKey } from "./identity";
+import ProfileEditor from "./ProfileEditor";
+import ProfileDialog from "./ProfileDialog";
+import MyHome from "./MyHome";
+import UserAvatar from "./UserAvatar";
+import { getOwnerKey } from "./identity";
 import type {
   Comment,
   Entry,
@@ -91,6 +95,9 @@ function PostCard({
   commentsLoading,
   onAddComment,
   onDeleteComment,
+  posterAvatar,
+  posterName,
+  onOpenProfile,
 }: {
   entry: Entry;
   me: SessionUser | null;
@@ -102,11 +109,14 @@ function PostCard({
   commentsLoading: boolean;
   onAddComment: (e: Entry, text: string) => Promise<boolean>;
   onDeleteComment: (c: Comment) => void;
+  posterAvatar?: string | null;
+  posterName?: string;
+  onOpenProfile: (userId: string) => void;
 }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const isMine = me ? (entry.user_id ? entry.user_id === me.id : entry.owner_key === ownerKey) : false;
-  const who = entry.owner_name || "匿名群友";
+  const who = entry.user_id && posterName ? posterName : (entry.owner_name || "匿名群友");
 
   const send = async () => {
     const text = draft.trim();
@@ -120,10 +130,14 @@ function PostCard({
   return (
     <article className="rounded-2xl border border-butter-2 bg-white/85 p-3.5 shadow-card fadein sm:p-4">
       <div className="mb-3 flex items-center gap-2.5">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full font-medium text-white" style={{ background: avatarColor(who) }}>{who.slice(0, 1)}</div>
+        <UserAvatar name={who} avatar={posterAvatar} size={36} onClick={entry.user_id ? () => onOpenProfile(entry.user_id!) : undefined} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <span className="truncate">{who}</span>
+            {entry.user_id ? (
+              <button type="button" onClick={() => onOpenProfile(entry.user_id!)} className="truncate hover:text-primary-dark hover:underline" title="查看 TA 的主页">{who}</button>
+            ) : (
+              <span className="truncate">{who}</span>
+            )}
             {isMine ? <span className="shrink-0 rounded-full bg-butter/40 px-2 py-0.5 text-[11px] text-primary-dark">我</span> : null}
           </div>
           <div className="text-[11px] text-muted">
@@ -266,6 +280,11 @@ export default function HomeClient() {
   const [ownerKey, setOwnerKey] = useState("");
   const [me, setMe] = useState<SessionUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  // 游客模式：可浏览全部内容，但不能发帖/评论/点赞/投票（这些操作会弹出登录框）
+  const [guest, setGuest] = useState(false);
+  const [userMap, setUserMap] = useState<Record<string, { nickname: string; avatar: string | null }>>({});
+  const [profileOpen, setProfileOpen] = useState<string | null>(null);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("mine");
@@ -321,6 +340,7 @@ export default function HomeClient() {
       if (!res.ok) throw new Error(json.error || "读取失败");
       setEntries(json.items || []);
       if (json.user) setMe(json.user);
+      if (json.users) setUserMap(json.users);
       setConfigError("");
     } catch (e) {
       setConfigError(e instanceof Error ? e.message : "读取清单失败");
@@ -336,8 +356,14 @@ export default function HomeClient() {
       try {
         const res = await fetch("/api/auth", { cache: "no-store" });
         const json = await res.json();
-        if (json.user) setMe(json.user);
-        else setLoginOpen(true);
+        if (json.user) {
+          setMe(json.user);
+          localStorage.removeItem("gamewall_guest");
+        } else if (localStorage.getItem("gamewall_guest") === "1") {
+          setGuest(true);
+        } else {
+          setLoginOpen(true);
+        }
       } catch {
         setLoginOpen(true);
       } finally {
@@ -365,6 +391,8 @@ export default function HomeClient() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "登录失败");
       setMe(json.user);
+      setGuest(false);
+      localStorage.removeItem("gamewall_guest");
       setLoginOpen(false);
       setLoginPass("");
       await load();
@@ -378,11 +406,31 @@ export default function HomeClient() {
   const doLogout = async () => {
     await fetch("/api/auth", { method: "DELETE" });
     setMe(null);
+    setGuest(false);
+    localStorage.removeItem("gamewall_guest");
     setOpenComments(null);
     setEditSiteOpen(false);
+    setProfileOpen(null);
+    setProfileEditorOpen(false);
     setLoginUser("");
     setLoginPass("");
     setLoginOpen(true);
+  };
+
+  const enterAsGuest = () => {
+    localStorage.setItem("gamewall_guest", "1");
+    setGuest(true);
+    setLoginOpen(false);
+    setLoginError("");
+    setLoginPass("");
+  };
+
+  const onProfileSaved = async (updated: { nickname: string; avatar: string | null; bio: string }, wasSelf: boolean) => {
+    if (wasSelf) {
+      setMe((prev) => prev ? { ...prev, ...updated } : prev);
+      await load();
+    }
+    await loadSettings();
   };
 
   const openSiteEditor = () => {
@@ -626,8 +674,14 @@ export default function HomeClient() {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2 rounded-full border border-butter-2 bg-white/80 px-3 py-1.5 text-xs shadow-card sm:gap-3 sm:px-4 sm:text-sm">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
-            <span className="max-w-[92px] truncate sm:max-w-none">{me ? <>你好，<b>{me.nickname}</b></> : "未登录"}</span>
+            {me ? (
+              <UserAvatar name={me.nickname} avatar={me.avatar} size={30} onClick={() => setProfileEditorOpen(true)} title="编辑我的主页" />
+            ) : (
+              <span className={`h-2 w-2 shrink-0 rounded-full ${guest ? "bg-emerald-500" : "bg-primary"}`} />
+            )}
+            <span className="max-w-[92px] truncate sm:max-w-none">
+              {me ? <>你好，<b>{me.nickname}</b></> : guest ? "游客浏览中" : "未登录"}
+            </span>
             {admin ? <span className="hidden rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary-dark sm:inline">管理员</span> : null}
             {me ? (
               <button type="button" onClick={() => void doLogout()} className="text-xs text-muted underline hover:text-primary-dark">退出</button>
@@ -655,21 +709,46 @@ export default function HomeClient() {
           </div>
         ) : null}
 
+        {guest && !me ? (
+          <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-butter-2 bg-white/80 px-4 py-3 text-sm text-muted">
+            <span>👀 你正在以游客身份浏览，可以查看清单、广场和投票结果；发帖、评论、点赞和投票需要先登录。</span>
+            <button type="button" onClick={() => setLoginOpen(true)} className="ml-auto shrink-0 text-primary-dark underline">登录 / 注册</button>
+          </div>
+        ) : null}
+
         <div className="mb-6 flex w-full rounded-full border border-butter-2 bg-cream-2 p-1 sm:inline-flex sm:w-auto">
-          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>📚 我的清单</button>
+          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🏠 个人主页</button>
           <button type="button" onClick={() => setTab("square")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
           <button type="button" onClick={() => setTab("events")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "events" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗳️ 活动</button>
         </div>
 
         {tab === "mine" ? (
           <div className="fadein space-y-6">
+            {me ? (
+              <MyHome
+                me={me}
+                games={mine.length}
+                thoughts={mine.filter((e) => e.thoughts?.trim()).length}
+                onEdit={() => setProfileEditorOpen(true)}
+              />
+            ) : (
+              <section className="card p-5 text-center">
+                <div className="mb-2 text-3xl">🏠</div>
+                <p className="text-sm text-muted">登录后即可拥有自己的主页，自定义头像、姓名和个性签名。</p>
+                <button type="button" onClick={() => setLoginOpen(true)} className="btn mt-3">登录 / 注册</button>
+              </section>
+            )}
+
             <section className="card p-4 sm:p-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-medium">🔍 添加游戏</h2>
                   <p className="text-xs text-muted">从 Bangumi 搜索并自动本地化封面</p>
                 </div>
-                <button type="button" className="btn w-full sm:w-auto" onClick={() => setSearchOpen(true)}>＋ 搜索游戏</button>
+                <button type="button" className="btn w-full sm:w-auto" onClick={() => {
+                  if (!me) { setLoginOpen(true); return; }
+                  setSearchOpen(true);
+                }}>＋ 搜索游戏</button>
               </div>
               <p className="text-sm text-muted">点击右上角「搜索游戏」，输入名字后选择封面即可加入清单。封面由服务端抓取并保存到你自己的存储，不依赖 Bangumi 图床。</p>
             </section>
@@ -761,6 +840,9 @@ export default function HomeClient() {
                     commentsLoading={commentsLoading && openComments === e.id}
                     onAddComment={onAddComment}
                     onDeleteComment={(c) => void onDeleteComment(c)}
+                    posterAvatar={e.user_id ? userMap[e.user_id]?.avatar : null}
+                    posterName={e.user_id ? userMap[e.user_id]?.nickname : undefined}
+                    onOpenProfile={(uid) => setProfileOpen(uid)}
                   />
                 ))}
               </div>
@@ -834,9 +916,11 @@ export default function HomeClient() {
             <label className="mt-3 block text-sm font-medium">密码</label>
             <input type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void doLogin(); }} placeholder="至少 6 位" className="input mt-2" />
             {loginError ? <p className="mt-3 text-xs text-red-600">{loginError}</p> : null}
-            <div className="mt-5 flex justify-end">
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={enterAsGuest} className="btn-ghost w-full sm:w-auto">👀 游客浏览</button>
               <button type="button" onClick={() => void doLogin()} disabled={loginBusy} className="btn w-full sm:w-auto">{loginBusy ? "登录中…" : "进入游戏墙"}</button>
             </div>
+            <p className="mt-3 text-center text-[11px] text-muted">游客可浏览全部内容，但发帖、评论、点赞和投票需先登录。</p>
           </div>
         </div>
       ) : null}
@@ -856,6 +940,24 @@ export default function HomeClient() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {profileOpen && me ? (
+        <ProfileDialog
+          userId={profileOpen}
+          me={me}
+          admin={admin}
+          onClose={() => setProfileOpen(null)}
+          onProfileUpdated={() => void load()}
+        />
+      ) : null}
+
+      {profileEditorOpen && me ? (
+        <ProfileEditor
+          me={me}
+          onClose={() => setProfileEditorOpen(false)}
+          onSaved={(updated, wasSelf) => onProfileSaved(updated, wasSelf)}
+        />
       ) : null}
     </>
   );

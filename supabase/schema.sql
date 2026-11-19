@@ -15,6 +15,8 @@ create table if not exists public.users (
   nickname      text not null,
   owner_key     text,
   role          text not null default 'user' check (role in ('user', 'admin')),
+  avatar        text,
+  bio           text not null default '',
   created_at    timestamptz not null default now()
 );
 create unique index if not exists users_username_norm_uidx on public.users (username_norm);

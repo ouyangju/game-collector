@@ -41,9 +41,11 @@ Supabase 提供 Postgres 数据库 + 图片存储，免费层对个人项目足�
 > ⚠️ **已有数据库升级（重要）**：如果你的 Supabase 里已经跑过旧版脚本（已有一批清单数据），**不要重新跑新版 `schema.sql`**。按顺序增量执行：
 > 1. `supabase/migration-v2.sql`（加 `users`/`likes`/`comments` 表、给 `game_list` 加 `user_id` 列）—— 若已执行过可跳过；
 > 2. `supabase/migration-v3.sql`（加 `users.role` 管理员角色、`site_settings` 头图/公告表）—— 若已执行过可跳过；
-> 3. `supabase/migration-v4.sql`（加 `polls`/`poll_options`/`poll_votes` 投票三表）—— **新增投票功能，必须执行**。
+> 3. `supabase/migration-v4.sql`（加 `polls`/`poll_options`/`poll_votes` 投票三表）—— 投票功能，已执行可跳过；
+> 4. `supabase/migration-v5.sql`（给 `users` 加 `avatar`/`bio` 个人主页字段）—— **本次新增，必须执行**。
 >
 > 全都是增量语句、可重复执行，不会破坏已有数据。旧数据在账号首次登录时会自动过户到该账号。
+> 未执行 v5 也不会整站报错（头像/签名字段会自动降级为空），但个人主页功能不可用。
 
 ---
 
@@ -88,6 +90,9 @@ npm run dev
 10. 切到「🗳️ 活动」→ 管理员点「＋ 新建投票」→ 填标题、选持续时间、从 Bangumi 搜索添加至少两个游戏选项 → 创建。
 11. 任意登录用户点选项右侧「投票」→ 投票后立即看到票数与百分比；再点其他选项不会重复计票（一人一票）。
 12. 管理员在投票卡片底部点「查看投票明细」→ 可看到每个选项分别是谁投的；「往期投票」里可查看所有已截止的投票结果，管理员还可删除投票。
+13. 切到「🏠 个人主页」→ 点「编辑主页」→ 可改姓名、上传头像或填 QQ 号一键读取昵称头像、写个性签名。**改姓名会同步修改登录账户名**，请记住新名字。
+14. 在「群友广场」点某条帖子的头像或昵称 → 进入 TA 的主页，可看头像、姓名、签名和 TA 发过的全部游戏与感想（只能看，不能改）。管理员会多出一个「编辑此主页」按钮，可代改他人资料。
+15. 未登录时登录框点「👀 游客浏览」→ 可浏览清单、广场、投票和他人主页；发帖、评论、点赞、投票会提示先登录。游客状态记在本机，关闭页面后仍保留，登录即自动退出游客态。
 
 > **投票规则**：一人一票（同一投票内不可重复投票、不可改票）；投票进行中，未投票的普通用户只看到选项、不显示票数；投过票后或投票截止后才显示得票数与比例；投票人明细仅管理员可见。持续时间从创建时刻算起，到点自动转入「往期投票」。
 
@@ -96,6 +101,8 @@ npm run dev
 >  sessions 用 `SUPABASE_SERVICE_ROLE_KEY` 派生密钥做 HMAC 签名，存在 httpOnly Cookie 里；密码用 scrypt 加盐哈希，服务端不存明文。账户表对匿名角色完全不开放，密码哈希不会泄露。
 
 > Bangumi API 要求规范的 User-Agent，服务端已用 `BANGUMI_UA` 设置。若搜索报 403，去 https://next.bgm.tv/demo/access-token 申请一个 access token（公开搜索一般不需要，但限流时有帮助）。
+
+> **关于「QQ 一键填入」**：腾讯官方没有"凭 QQ 号拿昵称"的开放接口（需 OAuth 授权），所以昵称通过多个公开查询接口依次尝试，头像则用官方 `q1.qlogo.cn` 按号码拼出。两者都在**服务端**完成并转存到自己的 Storage，前端和访客都接触不到第三方地址或 QQ 号。QQ 号本身**不写入数据库**，只把查到的昵称和头像存进你的资料。若昵称含表情／特殊符号会自动过滤（因为要兼作登录名），不足 2 位时请手动填写；若公开接口临时失效，头像通常仍可读取，昵称可手填。
 
 ---
 
@@ -226,26 +233,34 @@ game-collector-server/
 │   ├── api/settings/upload/route.ts# 管理员上传头图→转存 Supabase→写入设置
 │   ├── api/polls/route.ts          # 投票列表/创建(管理员)/删除(管理员)
 │   ├── api/polls/vote/route.ts     # 投票（需登录，一人一票，校验截止时间）
+│   ├── api/profile/route.ts        # 个人主页读取(公开)/编辑(自己或管理员改他人)
+│   ├── api/profile/avatar/route.ts # 头像上传转存 Supabase（管理员可代传）
+│   ├── api/qq/lookup/route.ts      # QQ 号→昵称+官方头像，服务端代理并转存（QQ号不落库）
 │   ├── api/games/search/route.ts   # 服务端代理 Bangumi 游戏搜索（type=4），带12分钟缓存
 │   ├── api/games/image/route.ts    # 抓图→校验→转存 Supabase，返回公开URL
 │   ├── api/games/thumbnail/route.ts# 抓图→返回二进制，供搜索结果即时展示
 │   ├── globals.css / layout.tsx / page.tsx
 ├── components/
-│   ├── HomeClient.tsx              # 主界面：登录/头图公告/清单/广场/活动 + 移动端适配
+│   ├── HomeClient.tsx              # 主界面：登录/游客/头图公告/主页/广场/活动 + 移动端适配
 │   ├── EventsPanel.tsx             # 活动模块：投票/结果比例/管理员明细/往期/创建投票
+│   ├── MyHome / ProfileDialog      # 个人主页资料卡 / 他人主页只读查看（管理员可编辑）
+│   ├── ProfileEditor.tsx           # 资料编辑：姓名/头像上传/QQ填入/签名
+│   ├── UserAvatar.tsx              # 通用头像（自定义图或姓名色块，可点击进主页）
 │   ├── SearchDialog.tsx            # 搜索弹窗（网格结果、缩略图回退、加载更多、多选模式）
 │   └── identity.ts                 # 本地 owner_key（用于旧数据过户识别）
 ├── lib/
 │   ├── auth.ts                     # 密码哈希(scrypt)、HMAC 签名会话、当前用户、isAdmin
 │   ├── bangumi.ts                  # Bangumi 搜索：简繁双搜、去重、缓存、超时
 │   ├── image-guard.ts              # 图片白名单(lain.bgm.tv)+格式/大小/魔数校验
+│   ├── qq.ts                       # QQ 昵称多源查询 + 官方头像下载校验（服务端）
 │   ├── supabase.ts                 # Supabase 客户端（浏览器端 + 服务端）
 │   └── types.ts                    # 前后端共享类型（含 SessionUser.role / SiteSettings）
 └── supabase/
     ├── schema.sql                  # 全新安装：建表 + RLS + 存储桶
     ├── migration-v2.sql            # 升级：账户/点赞/评论 + 旧数据过户
     ├── migration-v3.sql            # 升级：管理员角色(role) + 站点设置(site_settings)
-    └── migration-v4.sql            # 升级：活动投票（polls/poll_options/poll_votes + RLS）
+    ├── migration-v4.sql            # 升级：活动投票（polls/poll_options/poll_votes + RLS）
+    └── migration-v5.sql            # 升级：个人主页（users.avatar / users.bio）
 ```
 
 ## 六、和你朋友方案的对应关系

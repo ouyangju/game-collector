@@ -44,7 +44,24 @@ export async function GET(req: NextRequest) {
     e.liked_by_me = likedSet.has(e.id);
   });
 
-  const payload: EntriesResponse = { items, user };
+  // 发帖人头像/昵称索引：广场点击头像进主页用（v5 迁移前回退到只取昵称）
+  const userMap: Record<string, { nickname: string; avatar: string | null }> = {};
+  try {
+    const uids = Array.from(new Set(items.map((e) => e.user_id).filter(Boolean))) as string[];
+    if (uids.length) {
+      const { data: usersData } = await sb
+        .from("users")
+        .select("id, nickname, avatar")
+        .in("id", uids);
+      (usersData || []).forEach((u: { id: string; nickname: string; avatar: string | null }) => {
+        userMap[u.id] = { nickname: u.nickname, avatar: u.avatar ?? null };
+      });
+    }
+  } catch {
+    // 未执行 v5 迁移（无 avatar 列）时不影响主功能
+  }
+
+  const payload: EntriesResponse = { items, user, users: userMap };
   return NextResponse.json(payload);
 }
 

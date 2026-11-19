@@ -13,6 +13,8 @@ export type SessionUser = {
   username: string;
   nickname: string;
   role: "user" | "admin";
+  avatar?: string | null;
+  bio?: string;
 };
 
 export function isAdmin(user: SessionUser | null): user is SessionUser & { role: "admin" } {
@@ -87,12 +89,20 @@ export async function currentUser(req: NextRequest): Promise<SessionUser | null>
   const uid = verifySession(req.cookies.get(SESSION_COOKIE)?.value);
   if (!uid) return null;
   const sb = supabaseServer();
-  const { data } = await sb
+  // 先按含个人主页字段查询；尚未执行 v5 迁移（无 avatar/bio 列）时回退，避免整站登录失效
+  const { data: full } = await sb
+    .from("users")
+    .select("id, username, nickname, role, avatar, bio")
+    .eq("id", uid)
+    .maybeSingle();
+  if (full) return full as SessionUser;
+
+  const { data: basic } = await sb
     .from("users")
     .select("id, username, nickname, role")
     .eq("id", uid)
     .maybeSingle();
-  return (data as SessionUser) || null;
+  return (basic as SessionUser | null) || null;
 }
 
 export const USERNAME_RE = /^[\w\u4e00-\u9fa5-]{2,20}$/;

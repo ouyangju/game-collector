@@ -22,6 +22,8 @@ export type SessionUser = {
   username: string;
   nickname: string;
   role: "user" | "admin";
+  avatar?: string | null;
+  bio?: string;
 };
 
 export type SiteSettings = {
@@ -69,6 +71,34 @@ export type Entry = {
 export type EntriesResponse = {
   items: Entry[];
   user: SessionUser | null;
+  // 广场里展示发帖人头像用；按 user_id 索引（未过户的旧数据没有用户，取不到）
+  users?: Record<string, { nickname: string; avatar: string | null }>;
+};
+
+// ===== 个人主页 =====
+
+export type Profile = {
+  id: string;
+  username: string;
+  nickname: string;
+  avatar: string | null;
+  bio: string;
+  role: "user" | "admin";
+  created_at: string;
+};
+
+// 访客查看他人主页时返回的全部内容（只读取，不可编辑）
+export type ProfileResponse = {
+  profile: Profile;
+  entries: Entry[];
+  stats: { games: number; thoughts: number; likes: number };
+};
+
+// QQ 号查询结果（服务端代理官方接口 + 头像转存）
+export type QQInfo = {
+  nickname: string;
+  avatar: string | null;
+  qq: string;
 };
 
 // ===== 活动 / 投票 =====

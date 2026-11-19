@@ -20,6 +20,8 @@ type Row = {
   nickname: string;
   owner_key: string | null;
   role?: "user" | "admin";
+  avatar?: string | null;
+  bio?: string;
 };
 
 function publicUser(r: Row) {
@@ -28,6 +30,8 @@ function publicUser(r: Row) {
     username: r.username,
     nickname: r.nickname,
     role: r.role === "admin" ? "admin" : "user",
+    avatar: r.avatar ?? null,
+    bio: r.bio ?? "",
   };
 }
 
