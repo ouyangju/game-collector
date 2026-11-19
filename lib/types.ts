@@ -17,9 +17,32 @@ export type SearchResponse = {
   hasMore: boolean;
 };
 
+export type SessionUser = {
+  id: string;
+  username: string;
+  nickname: string;
+};
+
+export type Comment = {
+  id: number;
+  entry_id: number;
+  user_id: string;
+  author_name: string;
+  content: string;
+  created_at: string;
+};
+
+// 广场列表里每条帖子的社交统计（由服务端聚合）
+export type SocialStat = {
+  like_count: number;
+  comment_count: number;
+  liked_by_me: boolean;
+};
+
 export type Entry = {
   id: number;
   owner_key: string;
+  user_id: string | null;
   owner_name: string;
   subject_id: number;
   title: string;
@@ -32,4 +55,12 @@ export type Entry = {
   my_score: number | null;
   play_year: number;
   created_at: string;
+  like_count?: number;
+  comment_count?: number;
+  liked_by_me?: boolean;
+};
+
+export type EntriesResponse = {
+  items: Entry[];
+  user: SessionUser | null;
 };

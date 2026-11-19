@@ -35,8 +35,10 @@ Supabase 提供 Postgres 数据库 + 图片存储，免费层对个人项目足�
    - `Project URL` → 填到 `.env.local` 的 `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY`（**保密，只在服务端用**）
-5. 左侧 **SQL Editor → New query**，把本仓库 `supabase/schema.sql` 全文粘贴进去，点 **Run**。看到成功提示即可（建表 + 建策略 + 建 `game-covers` 存储桶）。
+5. 左侧 **SQL Editor → New query**，把本仓库 `supabase/schema.sql` 全文粘贴进去，点 **Run**。看到成功提示即可（建账户表/清单表/点赞表/评论表 + 策略 + `game-covers` 桶）。
 6. 左侧 **Storage**，确认出现 `game-covers` 桶，且是 Public。
+
+> ⚠️ **已有数据库升级（重要）**：如果你的 Supabase 里已经跑过旧版 `schema.sql`（已有一批清单数据），**不要重新跑新版 schema**。请改为执行 `supabase/migration-v2.sql`——它只做增量升级（加 `users`/`likes`/`comments` 表、给 `game_list` 加 `user_id` 列），不会破坏已有数据。旧数据在账号首次登录时会自动过户到该账号。
 
 ---
 
@@ -66,11 +68,16 @@ npm run dev
 浏览器打开 http://localhost:3000 。
 
 验证顺序：
-1. 首次进入弹昵称框 → 填昵称。
-2. 点「搜索游戏」→ 输入「艾尔登法环」→ 应出现 Bangumi 游戏封面网格（封面走本地服务端代理）。
-3. 点某张卡片「选择」→ 服务端抓取封面转存到 Supabase → 加入清单。
-4. 写感想、打分 → 刷新页面数据仍在。
-5. 另一台设备/浏览器打开同一地址，填不同昵称 → 在「群友广场」能看到彼此的清单。
+1. 首次进入弹登录框 → 填账户名 + 密码（≥6 位）。新账户名自动注册；旧账户名密码错误会被拒绝。
+2. 刷新页面 → 无需重复登录（会话 Cookie 保存 30 天）。
+3. 点「搜索游戏」→ 输入「艾尔登法环」→ 应出现 Bangumi 游戏封面网格（封面走本地服务端代理）。
+4. 点某张卡片「选择」→ 服务端抓取封面转存到 Supabase → 加入清单。
+5. 写感想、打分 → 刷新页面数据仍在。
+6. 切到「群友广场」→ 默认显示本月帖子；可按月份切换、按发布时间或点赞数排序。
+7. 给别人的帖子点赞（再点一次取消）、发表评论（自己的评论可删除）。
+8. 另一台设备/浏览器打开同一地址，用不同账户名登录 → 能看到彼此的清单并互动。
+
+>  sessions 用 `SUPABASE_SERVICE_ROLE_KEY` 派生密钥做 HMAC 签名，存在 httpOnly Cookie 里；密码用 scrypt 加盐哈希，服务端不存明文。账户表对匿名角色完全不开放，密码哈希不会泄露。
 
 > Bangumi API 要求规范的 User-Agent，服务端已用 `BANGUMI_UA` 设置。若搜索报 403，去 https://next.bgm.tv/demo/access-token 申请一个 access token（公开搜索一般不需要，但限流时有帮助）。
 
@@ -195,21 +202,27 @@ npm run deploy:cf
 ```
 game-collector-server/
 ├── app/
+│   ├── api/auth/route.ts           # 登录/自动注册/退出/会话恢复
+│   ├── api/entries/route.ts        # 清单 CRUD + 点赞评论数聚合
+│   ├── api/likes/route.ts          # 点赞（一人一赞，可取消）
+│   ├── api/comments/route.ts       # 评论的增删查
 │   ├── api/games/search/route.ts   # 服务端代理 Bangumi 游戏搜索（type=4），带12分钟缓存
 │   ├── api/games/image/route.ts    # 抓图→校验→转存 Supabase，返回公开URL
 │   ├── api/games/thumbnail/route.ts# 抓图→返回二进制，供搜索结果即时展示
-│   ├── api/entries/route.ts        # 清单 CRUD（GET/POST/PATCH/DELETE）
 │   ├── globals.css / layout.tsx / page.tsx
 ├── components/
-│   ├── HomeClient.tsx              # 主界面：清单 / 广场 / 感想编辑
+│   ├── HomeClient.tsx              # 主界面：登录/清单/广场(月份+排序)/点赞评论
 │   ├── SearchDialog.tsx            # 搜索弹窗（网格结果、缩略图回退、加载更多）
-│   └── identity.ts                 # 免登录身份（本地 owner_key + 昵称）
+│   └── identity.ts                 # 本地 owner_key（用于旧数据过户识别）
 ├── lib/
+│   ├── auth.ts                     # 密码哈希(scrypt)、HMAC 签名会话、当前用户
 │   ├── bangumi.ts                  # Bangumi 搜索：简繁双搜、去重、缓存、超时
 │   ├── image-guard.ts              # 图片白名单(lain.bgm.tv)+格式/大小/魔数校验
 │   ├── supabase.ts                 # Supabase 客户端（浏览器端 + 服务端）
 │   └── types.ts                    # 前后端共享类型
-└── supabase/schema.sql             # 建表 + RLS + 存储桶脚本
+└── supabase/
+    ├── schema.sql                  # 全新安装：建表 + RLS + 存储桶
+    └── migration-v2.sql            # 已有数据库升级：账户/点赞/评论 + 旧数据过户
 ```
 
 ## 六、和你朋友方案的对应关系

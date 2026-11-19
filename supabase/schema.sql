@@ -1,12 +1,31 @@
 -- ============================================================
--- 在 Supabase 控制台 → SQL Editor 里粘贴执行本文件
--- 一次执行会建表 + 建策略 + 建存储桶；重复执行是安全的（IF NOT EXISTS / DROP IF EXISTS）
+-- 全新安装：在 Supabase 控制台 → SQL Editor 里粘贴执行本文件
+-- 一次建表 + 建策略 + 建存储桶；重复执行安全（IF NOT EXISTS / DROP IF EXISTS）
+-- 已有数据库升级请用 supabase/migration-v2.sql
 -- ============================================================
 
--- 1) 游戏清单表
+create extension if not exists pgcrypto;
+
+-- 1) 账户表（只允许服务端 service_role 读写，防止密码哈希泄露）
+create table if not exists public.users (
+  id            uuid primary key default gen_random_uuid(),
+  username      text not null,
+  username_norm text not null,
+  password_hash text not null,
+  nickname      text not null,
+  owner_key     text,
+  created_at    timestamptz not null default now()
+);
+create unique index if not exists users_username_norm_uidx on public.users (username_norm);
+create unique index if not exists users_owner_key_uidx on public.users (owner_key) where owner_key is not null;
+alter table public.users enable row level security;
+revoke all on table public.users from anon, authenticated;
+
+-- 2) 游戏清单表
 create table if not exists public.game_list (
   id            bigint generated always as identity primary key,
   owner_key     text not null,
+  user_id       uuid references public.users(id) on delete set null,
   owner_name    text not null,
   subject_id    integer not null,
   title         text not null,
@@ -21,52 +40,68 @@ create table if not exists public.game_list (
   created_at    timestamptz not null default now(),
   unique (owner_key, subject_id)
 );
+create index if not exists game_list_user_id_idx on public.game_list (user_id);
+create unique index if not exists game_list_user_subject_uidx
+  on public.game_list (user_id, subject_id) where user_id is not null;
 
--- 2) RLS：所有人可读，写入由服务端 API 用 owner_key 约束
+-- 3) RLS：所有人可读，写入由服务端 API 强制鉴权
 alter table public.game_list enable row level security;
-
 grant select, insert, update, delete on table public.game_list to authenticated, anon;
 
 drop policy if exists game_list_read on public.game_list;
 create policy game_list_read on public.game_list for select to authenticated, anon using (true);
-
 drop policy if exists game_list_insert on public.game_list;
 create policy game_list_insert on public.game_list for insert to authenticated, anon with check (true);
-
 drop policy if exists game_list_update on public.game_list;
 create policy game_list_update on public.game_list for update to authenticated, anon using (true) with check (true);
-
 drop policy if exists game_list_delete on public.game_list;
 create policy game_list_delete on public.game_list for delete to authenticated, anon using (true);
 
--- 说明：本站所有写入都经过 Next.js 服务端 API(/api/entries)，
--- 服务端在 SQL 层用 .eq('owner_key', ...) 约束归属，因此 RLS 策略对所有角色开放读写。
--- 如果你想要更严格的安全模型，可改为「前端带 token + RLS 校验 auth.uid()」，
--- 但那需要引入登录，本站为免登录设计故不采用。
+-- 4) 点赞表：一人一赞
+create table if not exists public.likes (
+  id         bigint generated always as identity primary key,
+  entry_id   bigint not null references public.game_list(id) on delete cascade,
+  user_id    uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (entry_id, user_id)
+);
+alter table public.likes enable row level security;
+grant select on table public.likes to anon, authenticated;
+revoke insert, update, delete on table public.likes from anon, authenticated;
+drop policy if exists likes_read on public.likes;
+create policy likes_read on public.likes for select to anon, authenticated using (true);
 
--- 3) 封面存储桶（公开读）
+-- 5) 评论表
+create table if not exists public.comments (
+  id         bigint generated always as identity primary key,
+  entry_id   bigint not null references public.game_list(id) on delete cascade,
+  user_id     uuid not null references public.users(id) on delete cascade,
+  author_name text not null,
+  content     text not null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists comments_entry_created_idx on public.comments (entry_id, created_at);
+alter table public.comments enable row level security;
+grant select on table public.comments to anon, authenticated;
+revoke insert, update, delete on table public.comments from anon, authenticated;
+drop policy if exists comments_read on public.comments;
+create policy comments_read on public.comments for select to anon, authenticated using (true);
+
+-- 6) 封面存储桶（公开读）
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'game-covers',
-  'game-covers',
-  true,
-  10485760,
-  array['image/jpeg', 'image/png', 'image/webp']
-)
+values ('game-covers', 'game-covers', true, 10485760,
+        array['image/jpeg', 'image/png', 'image/webp'])
 on conflict (id) do update set
   public = true,
   file_size_limit = 10485760,
   allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp'];
 
--- 4) 存储桶策略：允许服务端(anon key 视角)上传/覆盖，允许所有人读取
 drop policy if exists covers_read on storage.objects;
 create policy covers_read on storage.objects for select to authenticated, anon
 using (bucket_id = 'game-covers');
-
 drop policy if exists covers_insert on storage.objects;
 create policy covers_insert on storage.objects for insert to authenticated, anon
 with check (bucket_id = 'game-covers');
-
 drop policy if exists covers_update on storage.objects;
 create policy covers_update on storage.objects for update to authenticated, anon
 using (bucket_id = 'game-covers') with check (bucket_id = 'game-covers');
