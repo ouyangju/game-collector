@@ -12,7 +12,12 @@ export type SessionUser = {
   id: string;
   username: string;
   nickname: string;
+  role: "user" | "admin";
 };
+
+export function isAdmin(user: SessionUser | null): boolean {
+  return user?.role === "admin";
+}
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -84,7 +89,7 @@ export async function currentUser(req: NextRequest): Promise<SessionUser | null>
   const sb = supabaseServer();
   const { data } = await sb
     .from("users")
-    .select("id, username, nickname")
+    .select("id, username, nickname, role")
     .eq("id", uid)
     .maybeSingle();
   return (data as SessionUser) || null;

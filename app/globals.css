@@ -42,7 +42,10 @@ html, body {
 }
 
 * { box-sizing: border-box; }
-img { display: block; }
+img { display: block; max-width: 100%; }
+html, body { max-width: 100%; overflow-x: hidden; }
+button, a, select, input, textarea { -webkit-tap-highlight-color: transparent; }
+button, select { touch-action: manipulation; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
   outline: 3px solid rgba(217, 136, 65, .55);
   outline-offset: 2px;
@@ -59,4 +62,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .thought-box {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 移动端细节：保证长文本与按钮不撑破卡片 */
+.card, article { min-width: 0; }
+.truncate { min-width: 0; }
+
+@media (max-width: 380px) {
+  .btn, .btn-ghost { padding-left: 0.75rem; padding-right: 0.75rem; }
+  textarea.input, input.input { font-size: 16px; }
 }

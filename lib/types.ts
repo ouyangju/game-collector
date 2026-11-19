@@ -21,6 +21,12 @@ export type SessionUser = {
   id: string;
   username: string;
   nickname: string;
+  role: "user" | "admin";
+};
+
+export type SiteSettings = {
+  hero_image: string;
+  announcement: string;
 };
 
 export type Comment = {

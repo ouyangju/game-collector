@@ -19,10 +19,16 @@ type Row = {
   password_hash: string;
   nickname: string;
   owner_key: string | null;
+  role?: "user" | "admin";
 };
 
 function publicUser(r: Row) {
-  return { id: r.id, username: r.username, nickname: r.nickname };
+  return {
+    id: r.id,
+    username: r.username,
+    nickname: r.nickname,
+    role: r.role === "admin" ? "admin" : "user",
+  };
 }
 
 // GET /api/auth —— 读取当前登录状态（前端刷新页面时恢复会话）
@@ -107,6 +113,23 @@ export async function POST(req: NextRequest) {
   // 已有账户首次在新浏览器登录，也把它的 owner_key 记录到账户上（若尚未记录）
   if (!user.owner_key && /^[A-Za-z0-9_-]{8,64}$/.test(ownerKey)) {
     await sb.from("users").update({ owner_key: ownerKey }).eq("id", user.id);
+  }
+
+  // 管理员引导：若配置了 ADMIN_USERNAME 且本次登录账户名匹配，自动提升为管理员。
+  // 这样即使账户已存在也能生效；未跑迁移（无 role 列）时静默跳过，不影响登录。
+  const adminName = (process.env.ADMIN_USERNAME || "").trim().toLowerCase();
+  if (adminName && norm === adminName && user.role !== "admin") {
+    try {
+      const { data: promoted } = await sb
+        .from("users")
+        .update({ role: "admin" })
+        .eq("id", user.id)
+        .select()
+        .maybeSingle();
+      if (promoted) user = promoted as Row;
+    } catch {
+      // 忽略：数据库尚未执行 v3 迁移时无 role 列
+    }
   }
 
   const res = NextResponse.json({ user: publicUser(user), isNew });

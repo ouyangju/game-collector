@@ -14,6 +14,7 @@ create table if not exists public.users (
   password_hash text not null,
   nickname      text not null,
   owner_key     text,
+  role          text not null default 'user' check (role in ('user', 'admin')),
   created_at    timestamptz not null default now()
 );
 create unique index if not exists users_username_norm_uidx on public.users (username_norm);
@@ -87,7 +88,23 @@ revoke insert, update, delete on table public.comments from anon, authenticated;
 drop policy if exists comments_read on public.comments;
 create policy comments_read on public.comments for select to anon, authenticated using (true);
 
--- 6) 封面存储桶（公开读）
+-- 6) 站点设置（头图 / 公告语）：只允许服务端写入
+create table if not exists public.site_settings (
+  key         text primary key,
+  value       text not null default '',
+  updated_at  timestamptz not null default now()
+);
+alter table public.site_settings enable row level security;
+grant select on table public.site_settings to anon, authenticated;
+revoke insert, update, delete on table public.site_settings from anon, authenticated;
+drop policy if exists site_settings_read on public.site_settings;
+create policy site_settings_read on public.site_settings for select to anon, authenticated using (true);
+insert into public.site_settings (key, value) values
+  ('hero_image', ''),
+  ('announcement', '欢迎来到游戏墙！搜一搜、记一记，把今年玩过的好游戏和心得分享给大家～')
+on conflict (key) do nothing;
+
+-- 7) 封面存储桶（公开读）
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('game-covers', 'game-covers', true, 10485760,
         array['image/jpeg', 'image/png', 'image/webp'])

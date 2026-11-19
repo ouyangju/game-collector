@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SearchDialog from "./SearchDialog";
 import { avatarColor, getOwnerKey } from "./identity";
 import type {
@@ -8,10 +8,16 @@ import type {
   Entry,
   GameHit,
   SessionUser,
+  SiteSettings,
 } from "@/lib/types";
 
 type Tab = "mine" | "square";
 type SortBy = "time" | "likes";
+
+const DEFAULT_SETTINGS: SiteSettings = {
+  hero_image: "",
+  announcement: "欢迎来到游戏墙！",
+};
 
 function Stars({ value, onChange }: { value: number | null; onChange?: (n: number | null) => void }) {
   const n = value || 0;
@@ -111,13 +117,13 @@ function PostCard({
   };
 
   return (
-    <article className="rounded-2xl border border-butter-2 bg-white/85 p-4 shadow-card fadein">
+    <article className="rounded-2xl border border-butter-2 bg-white/85 p-3.5 shadow-card fadein sm:p-4">
       <div className="mb-3 flex items-center gap-2.5">
-        <div className="grid h-9 w-9 place-items-center rounded-full font-medium text-white" style={{ background: avatarColor(who) }}>{who.slice(0, 1)}</div>
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full font-medium text-white" style={{ background: avatarColor(who) }}>{who.slice(0, 1)}</div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm font-medium">
             <span className="truncate">{who}</span>
-            {isMine ? <span className="rounded-full bg-butter/40 px-2 py-0.5 text-[11px] text-primary-dark">我</span> : null}
+            {isMine ? <span className="shrink-0 rounded-full bg-butter/40 px-2 py-0.5 text-[11px] text-primary-dark">我</span> : null}
           </div>
           <div className="text-[11px] text-muted">
             {new Date(entry.created_at).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -172,7 +178,7 @@ function PostCard({
                     <span className="font-medium text-primary-dark">{c.author_name}</span>
                     <span className="text-[11px] text-muted">{new Date(c.created_at).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                     {mine ? (
-                      <button type="button" onClick={() => onDeleteComment(c)} className="ml-auto text-[11px] text-muted underline hover:text-red-600">删除</button>
+                      <button type="button" onClick={() => onDeleteComment(c)} className="ml-auto shrink-0 text-[11px] text-muted underline hover:text-red-600">删除</button>
                     ) : null}
                   </div>
                   <div className="thought-box mt-1 text-ink">{c.content}</div>
@@ -187,13 +193,71 @@ function PostCard({
               onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
               maxLength={500}
               placeholder="写下你的评论…"
-              className="input flex-1"
+              className="input min-w-0 flex-1"
             />
-            <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="btn px-4">{sending ? "…" : "发送"}</button>
+            <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="btn shrink-0 px-3 sm:px-4">{sending ? "…" : "发送"}</button>
           </div>
         </div>
       ) : null}
     </article>
+  );
+}
+
+// 头图横幅 + 公告语 + 管理员编辑入口
+function HeroBanner({
+  settings,
+  isAdmin,
+  onEdit,
+}: {
+  settings: SiteSettings;
+  isAdmin: boolean;
+  onEdit: () => void;
+}) {
+  const hasHero = Boolean(settings.hero_image);
+  return (
+    <section className="relative mb-6 overflow-hidden rounded-2xl border border-butter-2 bg-gradient-to-br from-[#FFE9C4] via-[#FFF3DA] to-[#FFE1B0] shadow-card">
+      {hasHero ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={proxiedCover(settings.hero_image) || settings.hero_image}
+            alt="站点头图"
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/25 to-ink/5" />
+        </>
+      ) : (
+        <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/40 blur-2xl" />
+      )}
+      <div className="relative flex min-h-[190px] flex-col justify-between gap-4 p-5 sm:min-h-[230px] sm:p-7">
+        <div className="flex items-start justify-between gap-3">
+          <span className={`rounded-full px-3 py-1 text-[11px] font-medium backdrop-blur ${hasHero ? "bg-white/25 text-white" : "bg-primary/15 text-primary-dark"}`}>
+            🎲 {new Date().getFullYear()} 年度游戏分享
+          </span>
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur transition ${hasHero ? "bg-white/25 text-white hover:bg-white/40" : "bg-white/80 text-primary-dark hover:bg-white"}`}
+            >
+              ✎ 编辑头图与公告
+            </button>
+          ) : null}
+        </div>
+
+        <div>
+          <h1 className={`text-3xl font-medium sm:text-4xl ${hasHero ? "text-white drop-shadow" : "text-ink"}`}>
+            🎮 游戏墙
+          </h1>
+          {settings.announcement ? (
+            <p className={`mt-2 max-w-2xl text-sm leading-relaxed sm:text-base ${hasHero ? "text-white/95 drop-shadow" : "text-muted"}`}>
+              📢 {settings.announcement}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -206,6 +270,17 @@ export default function HomeClient() {
   const [tab, setTab] = useState<Tab>("mine");
   const [searchOpen, setSearchOpen] = useState(false);
   const [configError, setConfigError] = useState("");
+
+  // 站点设置（头图 / 公告）
+  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
+  const [editSiteOpen, setEditSiteOpen] = useState(false);
+  const [draftAnnouncement, setDraftAnnouncement] = useState("");
+  const [uploadingHero, setUploadingHero] = useState(false);
+  const [savingSite, setSavingSite] = useState(false);
+  const [siteMsg, setSiteMsg] = useState("");
+  const heroInputRef = useRef<HTMLInputElement | null>(null);
+
+  const admin = me?.role === "admin";
 
   // 登录弹窗
   const [loginOpen, setLoginOpen] = useState(false);
@@ -226,6 +301,16 @@ export default function HomeClient() {
   const [openComments, setOpenComments] = useState<number | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<number, Comment[]>>({});
   const [commentsLoading, setCommentsLoading] = useState(false);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok) setSettings({ ...DEFAULT_SETTINGS, ...json });
+    } catch {
+      // 站点设置读取失败不影响主功能
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -259,7 +344,8 @@ export default function HomeClient() {
       }
     })();
     void load();
-  }, [load]);
+    void loadSettings();
+  }, [load, loadSettings]);
 
   const doLogin = async () => {
     const username = loginUser.trim();
@@ -292,9 +378,75 @@ export default function HomeClient() {
     await fetch("/api/auth", { method: "DELETE" });
     setMe(null);
     setOpenComments(null);
+    setEditSiteOpen(false);
     setLoginUser("");
     setLoginPass("");
     setLoginOpen(true);
+  };
+
+  const openSiteEditor = () => {
+    setDraftAnnouncement(settings.announcement || "");
+    setSiteMsg("");
+    setEditSiteOpen(true);
+  };
+
+  const uploadHero = async (file: File) => {
+    setUploadingHero(true);
+    setSiteMsg("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/settings/upload", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "上传失败");
+      await loadSettings();
+      setSiteMsg("头图已更新 ✅");
+    } catch (e) {
+      setSiteMsg(e instanceof Error ? e.message : "上传失败");
+    } finally {
+      setUploadingHero(false);
+      if (heroInputRef.current) heroInputRef.current.value = "";
+    }
+  };
+
+  const clearHero = async () => {
+    setSavingSite(true);
+    setSiteMsg("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hero_image: "" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "操作失败");
+      await loadSettings();
+      setSiteMsg("已恢复默认头图 ✅");
+    } catch (e) {
+      setSiteMsg(e instanceof Error ? e.message : "操作失败");
+    } finally {
+      setSavingSite(false);
+    }
+  };
+
+  const saveAnnouncement = async () => {
+    setSavingSite(true);
+    setSiteMsg("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ announcement: draftAnnouncement }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "保存失败");
+      await loadSettings();
+      setSiteMsg("公告已保存 ✅");
+    } catch (e) {
+      setSiteMsg(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setSavingSite(false);
+    }
   };
 
   const addGame = async (hit: GameHit) => {
@@ -464,17 +616,18 @@ export default function HomeClient() {
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-butter-2 bg-cream/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-5 py-3">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-xl text-white shadow-card">🎮</div>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-lg text-white shadow-card sm:h-10 sm:w-10 sm:text-xl">🎮</div>
             <div>
-              <div className="text-lg font-medium leading-tight">游戏墙</div>
-              <div className="text-[11px] tracking-wide text-muted">今年玩过的游戏</div>
+              <div className="text-base font-medium leading-tight sm:text-lg">游戏墙</div>
+              <div className="hidden text-[11px] tracking-wide text-muted sm:block">今年玩过的游戏</div>
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-3 rounded-full border border-butter-2 bg-white/80 px-4 py-1.5 text-sm shadow-card">
-            <span className="h-2 w-2 rounded-full bg-primary" />
-            <span>{me ? <>你好，<b>{me.nickname}</b></> : "未登录"}</span>
+          <div className="ml-auto flex items-center gap-2 rounded-full border border-butter-2 bg-white/80 px-3 py-1.5 text-xs shadow-card sm:gap-3 sm:px-4 sm:text-sm">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+            <span className="max-w-[92px] truncate sm:max-w-none">{me ? <>你好，<b>{me.nickname}</b></> : "未登录"}</span>
+            {admin ? <span className="hidden rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary-dark sm:inline">管理员</span> : null}
             {me ? (
               <button type="button" onClick={() => void doLogout()} className="text-xs text-muted underline hover:text-primary-dark">退出</button>
             ) : (
@@ -484,16 +637,16 @@ export default function HomeClient() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-5 pb-20">
-        <section className="px-2 py-9 text-center">
-          <h1 className="text-3xl font-medium sm:text-4xl">🎲 <span className="text-primary">{new Date().getFullYear()}</span> 游戏墙</h1>
-          <p className="mt-2 text-sm text-muted">搜一搜、记一记，把今年玩过的好游戏和心得分享给大家</p>
-          <div className="mt-4 inline-flex gap-6 text-sm text-muted">
-            <span><b className="text-lg text-primary-dark">{stats.games}</b> 款游戏</span>
-            <span><b className="text-lg text-primary-dark">{stats.friends}</b> 位群友</span>
-            <span><b className="text-lg text-primary-dark">{stats.thoughts}</b> 条感想</span>
-          </div>
-        </section>
+      <main className="mx-auto max-w-6xl px-3 pb-16 sm:px-5 sm:pb-20">
+        <div className="pt-5 sm:pt-7">
+          <HeroBanner settings={settings} isAdmin={admin} onEdit={openSiteEditor} />
+        </div>
+
+        <div className="mb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-center text-sm text-muted sm:gap-6">
+          <span><b className="text-lg text-primary-dark">{stats.games}</b> 款游戏</span>
+          <span><b className="text-lg text-primary-dark">{stats.friends}</b> 位群友</span>
+          <span><b className="text-lg text-primary-dark">{stats.thoughts}</b> 条感想</span>
+        </div>
 
         {configError ? (
           <div className="mb-5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -501,25 +654,25 @@ export default function HomeClient() {
           </div>
         ) : null}
 
-        <div className="mb-6 inline-flex rounded-full border border-butter-2 bg-cream-2 p-1">
-          <button type="button" onClick={() => setTab("mine")} className={`rounded-full px-5 py-2 text-sm font-medium transition ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>📚 我的清单</button>
-          <button type="button" onClick={() => setTab("square")} className={`rounded-full px-5 py-2 text-sm font-medium transition ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
+        <div className="mb-6 flex w-full rounded-full border border-butter-2 bg-cream-2 p-1 sm:inline-flex sm:w-auto">
+          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition sm:flex-none sm:px-5 ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>📚 我的清单</button>
+          <button type="button" onClick={() => setTab("square")} className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition sm:flex-none sm:px-5 ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
         </div>
 
         {tab === "mine" ? (
           <div className="fadein space-y-6">
-            <section className="card p-5 sm:p-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
+            <section className="card p-4 sm:p-6">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-medium">🔍 添加游戏</h2>
                   <p className="text-xs text-muted">从 Bangumi 搜索并自动本地化封面</p>
                 </div>
-                <button type="button" className="btn" onClick={() => setSearchOpen(true)}>＋ 搜索游戏</button>
+                <button type="button" className="btn w-full sm:w-auto" onClick={() => setSearchOpen(true)}>＋ 搜索游戏</button>
               </div>
               <p className="text-sm text-muted">点击右上角「搜索游戏」，输入名字后选择封面即可加入清单。封面由服务端抓取并保存到你自己的存储，不依赖 Bangumi 图床。</p>
             </section>
 
-            <section className="card p-5 sm:p-6">
+            <section className="card p-4 sm:p-6">
               <h2 className="mb-4 text-lg font-medium">📚 我的游戏清单 <span className="ml-2 text-xs font-normal text-muted">共 {mine.length} 款</span></h2>
               {loading || authLoading ? (
                 <div className="flex justify-center py-14 text-muted"><span className="spinner" /></div>
@@ -532,7 +685,7 @@ export default function HomeClient() {
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {mine.map((e) => (
                     <div key={e.id} className="flex gap-3 rounded-xl border border-butter-2 bg-cream-2 p-3">
-                      <Cover src={e.cover} alt={e.title} className="h-[108px] w-[78px] shrink-0 rounded-lg" />
+                      <Cover src={e.cover} alt={e.title} className="h-[108px] w-[74px] shrink-0 rounded-lg sm:w-[78px]" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium" title={e.title}>{e.title}</div>
                         <div className="mt-0.5 truncate text-xs text-muted">{[e.play_year, e.platform, e.bangumi_rating ? `Bangumi ${e.bangumi_rating}` : ""].filter(Boolean).join(" · ")}</div>
@@ -540,7 +693,7 @@ export default function HomeClient() {
                         <div className={`thought-box mt-2 max-h-24 overflow-auto rounded-lg border border-dashed border-butter-2 bg-white/80 p-2 text-xs ${e.thoughts ? "text-ink" : "italic text-muted"}`}>
                           {e.thoughts || "还没写感想，点下面按钮记一笔吧～"}
                         </div>
-                        <div className="mt-2 flex items-center gap-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                           <button type="button" onClick={() => openEdit(e)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark">{e.thoughts ? "编辑" : "写感想"}</button>
                           <button type="button" onClick={() => void removeEntry(e)} className="rounded-lg border border-butter-2 px-3 py-1.5 text-xs text-muted hover:bg-butter/30">移除</button>
                           <span className="ml-auto text-[11px] text-muted">♥ {e.like_count || 0} · 💬 {e.comment_count || 0}</span>
@@ -553,21 +706,21 @@ export default function HomeClient() {
             </section>
           </div>
         ) : (
-          <section className="card fadein p-5 sm:p-6">
+          <section className="card fadein p-4 sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-medium">🌈 群友广场</h2>
-              <span className="text-xs text-muted">按月查看大家的分享</span>
+              <span className="hidden text-xs text-muted sm:inline">按月查看大家的分享</span>
             </div>
 
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <input value={squareQuery} onChange={(e) => setSquareQuery(e.target.value)} placeholder="搜索游戏名、群友或感想…" className="input min-w-[200px] flex-1" />
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} className="input w-auto" title="排序方式">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <input value={squareQuery} onChange={(e) => setSquareQuery(e.target.value)} placeholder="搜索游戏名、群友或感想…" className="input w-full sm:min-w-[200px] sm:flex-1" />
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} className="input w-full sm:w-auto" title="排序方式">
                 <option value="time">按发布时间</option>
                 <option value="likes">按点赞数量</option>
               </select>
             </div>
 
-            <div className="mb-5 flex flex-wrap gap-2 border-b border-butter-2 pb-3">
+            <div className="mb-5 -mx-1 flex gap-2 overflow-x-auto border-b border-butter-2 px-1 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {months.length === 0 ? (
                 <span className="text-xs text-muted">暂无帖子</span>
               ) : months.map((m) => (
@@ -575,7 +728,7 @@ export default function HomeClient() {
                   key={m}
                   type="button"
                   onClick={() => setMonthFilter(m)}
-                  className={`rounded-full px-3 py-1.5 text-xs transition ${effectiveMonth === m ? "bg-primary text-white shadow-card" : "bg-cream-2 text-muted hover:text-primary-dark"}`}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs transition ${effectiveMonth === m ? "bg-primary text-white shadow-card" : "bg-cream-2 text-muted hover:text-primary-dark"}`}
                 >
                   {monthLabel(m)}
                 </button>
@@ -611,10 +764,61 @@ export default function HomeClient() {
           </section>
         )}
 
-        <footer className="pt-12 text-center text-xs text-muted">数据保存在你自己的 Supabase · 游戏资料由 Bangumi 提供</footer>
+        <footer className="pt-10 text-center text-xs text-muted sm:pt-12">数据保存在你自己的 Supabase · 游戏资料由 Bangumi 提供</footer>
       </main>
 
       <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={addGame} />
+
+      {editSiteOpen && admin ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-3 backdrop-blur-sm sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditSiteOpen(false); }}>
+          <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-5 shadow-2xl sm:p-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">✎ 编辑头图与公告</h3>
+              <button type="button" onClick={() => setEditSiteOpen(false)} aria-label="关闭" className="rounded-lg px-2 py-1 text-muted hover:bg-butter/30 hover:text-ink">✕</button>
+            </div>
+            <p className="mt-1 text-xs text-muted">仅管理员可见。保存后立即对所有人生效。</p>
+
+            <label className="mt-5 block text-sm font-medium">站点头图</label>
+            {settings.hero_image ? (
+              <div className="relative mt-2 overflow-hidden rounded-xl border border-butter-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={proxiedCover(settings.hero_image) || settings.hero_image} alt="当前头图" referrerPolicy="no-referrer" className="h-36 w-full object-cover" />
+                <button type="button" onClick={() => void clearHero()} disabled={savingSite} className="absolute right-2 top-2 rounded-lg bg-ink/60 px-2.5 py-1 text-xs text-white hover:bg-ink/80 disabled:opacity-50">移除头图</button>
+              </div>
+            ) : (
+              <div className="mt-2 grid h-28 place-items-center rounded-xl border border-dashed border-butter-2 bg-cream-2 text-sm text-muted">当前使用默认渐变背景</div>
+            )}
+            <input
+              ref={heroInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadHero(f); }}
+            />
+            <button type="button" onClick={() => heroInputRef.current?.click()} disabled={uploadingHero} className="btn-ghost mt-2 w-full">
+              {uploadingHero ? "上传中…" : "📷 上传新头图（JPG/PNG/WebP，≤5MB）"}
+            </button>
+
+            <label className="mt-5 block text-sm font-medium">头部公告语</label>
+            <textarea
+              value={draftAnnouncement}
+              onChange={(e) => setDraftAnnouncement(e.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="写一句欢迎语或公告…"
+              className="input mt-2 min-h-[90px] resize-y"
+            />
+            <div className="mt-1 text-right text-[11px] text-muted">{draftAnnouncement.length}/500</div>
+
+            {siteMsg ? <p className="mt-3 text-xs text-primary-dark">{siteMsg}</p> : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditSiteOpen(false)} className="btn-ghost">完成</button>
+              <button type="button" onClick={() => void saveAnnouncement()} disabled={savingSite} className="btn">{savingSite ? "保存中…" : "保存公告"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {loginOpen && !me ? (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/50 p-4 backdrop-blur-sm">
@@ -627,7 +831,7 @@ export default function HomeClient() {
             <input type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void doLogin(); }} placeholder="至少 6 位" className="input mt-2" />
             {loginError ? <p className="mt-3 text-xs text-red-600">{loginError}</p> : null}
             <div className="mt-5 flex justify-end">
-              <button type="button" onClick={() => void doLogin()} disabled={loginBusy} className="btn">{loginBusy ? "登录中…" : "进入游戏墙"}</button>
+              <button type="button" onClick={() => void doLogin()} disabled={loginBusy} className="btn w-full sm:w-auto">{loginBusy ? "登录中…" : "进入游戏墙"}</button>
             </div>
           </div>
         </div>
@@ -635,7 +839,7 @@ export default function HomeClient() {
 
       {editEntry ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditEntry(null); }}>
-          <div className="w-full max-w-md rounded-2xl border border-butter-2 bg-cream p-6 shadow-2xl">
+          <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-6 shadow-2xl">
             <h3 className="text-lg font-medium">写下游玩感想</h3>
             <p className="mt-1 text-xs text-muted">{editEntry.title}</p>
             <label className="mt-4 block text-sm font-medium">我的评分</label>

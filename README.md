@@ -38,7 +38,11 @@ Supabase 提供 Postgres 数据库 + 图片存储，免费层对个人项目足�
 5. 左侧 **SQL Editor → New query**，把本仓库 `supabase/schema.sql` 全文粘贴进去，点 **Run**。看到成功提示即可（建账户表/清单表/点赞表/评论表 + 策略 + `game-covers` 桶）。
 6. 左侧 **Storage**，确认出现 `game-covers` 桶，且是 Public。
 
-> ⚠️ **已有数据库升级（重要）**：如果你的 Supabase 里已经跑过旧版 `schema.sql`（已有一批清单数据），**不要重新跑新版 schema**。请改为执行 `supabase/migration-v2.sql`——它只做增量升级（加 `users`/`likes`/`comments` 表、给 `game_list` 加 `user_id` 列），不会破坏已有数据。旧数据在账号首次登录时会自动过户到该账号。
+> ⚠️ **已有数据库升级（重要）**：如果你的 Supabase 里已经跑过旧版脚本（已有一批清单数据），**不要重新跑新版 `schema.sql`**。按顺序增量执行：
+> 1. `supabase/migration-v2.sql`（加 `users`/`likes`/`comments` 表、给 `game_list` 加 `user_id` 列）—— 若已执行过可跳过；
+> 2. `supabase/migration-v3.sql`（加 `users.role` 管理员角色、`site_settings` 头图/公告表）—— **本次新增，必须执行**。
+>
+> 全都是增量语句、可重复执行，不会破坏已有数据。旧数据在账号首次登录时会自动过户到该账号。
 
 ---
 
@@ -57,7 +61,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGci...
 BANGUMI_UA=GameCollector/1.0 (你的邮箱)
+ADMIN_USERNAME=你的账户名
 ```
+
+> `ADMIN_USERNAME` 填你要作为管理员的账户名（就是首次登录时注册的账户名，不区分大小写）。这个账户登录后会自动成为管理员，可见「编辑头图与公告」入口。若留空，也可在 Supabase 里手动执行 `update public.users set role='admin' where username_norm='你的账户名';`。
 
 然后启动：
 
@@ -75,7 +82,10 @@ npm run dev
 5. 写感想、打分 → 刷新页面数据仍在。
 6. 切到「群友广场」→ 默认显示本月帖子；可按月份切换、按发布时间或点赞数排序。
 7. 给别人的帖子点赞（再点一次取消）、发表评论（自己的评论可删除）。
-8. 另一台设备/浏览器打开同一地址，用不同账户名登录 → 能看到彼此的清单并互动。
+8. 用管理员账户（`.env.local` 里 `ADMIN_USERNAME` 指定的那个）登录 → 首页头图下方出现「✎ 编辑头图与公告」按钮 → 可上传头图、修改顶部公告语，保存后所有人生效。
+9. 另一台设备/浏览器打开同一地址，用不同账户名登录 → 能看到彼此的清单并互动。
+
+> **手机端**：页面已做响应式适配——顶栏、头图、清单卡片、群友广场的月份标签（可横向滑动）、弹窗都针对窄屏优化，直接用手机浏览器打开即可。
 
 >  sessions 用 `SUPABASE_SERVICE_ROLE_KEY` 派生密钥做 HMAC 签名，存在 httpOnly Cookie 里；密码用 scrypt 加盐哈希，服务端不存明文。账户表对匿名角色完全不开放，密码哈希不会泄露。
 
@@ -101,8 +111,8 @@ npm run dev
    ```
    注意 `.env.local` 不会上传（在 `.gitignore` 里），这是对的。
 2. 打开 https://vercel.com ，用 GitHub 登录 → **Add New → Project** → 导入刚才的仓库。
-3. 是关键一步：在 **Environment Variables** 里添加四个变量（名字和本地 `.env.local` 一样）：
-   `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`BANGUMI_UA`。
+3. 是关键一步：在 **Environment Variables** 里添加五个变量（名字和本地 `.env.local` 一样）：
+   `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`BANGUMI_UA`、`ADMIN_USERNAME`（管理员账户名）。
 4. 点 **Deploy**，等 1–2 分钟。完成后 Vercel 会给你一个 `https://xxx.vercel.app` 的网址。
 5. 把这个网址发给群友即可。**以后每次 `git push`，Vercel 会自动重新部署。**
 
@@ -159,8 +169,8 @@ npm run dev
    - **Build command**：`npm run build && npx opennextjs-cloudflare build`
    - **Deploy command**：`npx opennextjs-cloudflare deploy`
    - **Root directory**：留空（项目就在仓库根目录）
-4. 在 **Environment variables**（构建和运行时都要填）添加 4 个变量，和 `.env.local` 完全一致：
-   `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`BANGUMI_UA`。
+4. 在 **Environment variables**（构建和运行时都要填）添加 5 个变量，和 `.env.local` 完全一致：
+   `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`BANGUMI_UA`、`ADMIN_USERNAME`。
 5. 点 **Save and Deploy**，等 2–5 分钟。成功后会给你 `https://game-collector.<你的子域>.workers.dev` 网址。
 6. （可选）绑定自己的域名：Worker → **Settings → Domains & Routes → Custom Domain**，添加你的域名，Cloudflare 会自动配好 DNS 和证书。
 
@@ -182,7 +192,7 @@ npm run preview:cf
 npm run deploy:cf
 ```
 
-线上环境变量在 Cloudflare 后台设置：Worker → **Settings → Variables and Secrets** → 添加那 4 个变量（`service_role` 这类密钥勾选 Secret）。
+线上环境变量在 Cloudflare 后台设置：Worker → **Settings → Variables and Secrets** → 添加那 5 个变量（`service_role` 这类密钥勾选 Secret）。
 
 ### 两种方案对比
 
@@ -206,23 +216,26 @@ game-collector-server/
 │   ├── api/entries/route.ts        # 清单 CRUD + 点赞评论数聚合
 │   ├── api/likes/route.ts          # 点赞（一人一赞，可取消）
 │   ├── api/comments/route.ts       # 评论的增删查
+│   ├── api/settings/route.ts       # 站点设置的读取(公开)/写入(仅管理员)
+│   ├── api/settings/upload/route.ts# 管理员上传头图→转存 Supabase→写入设置
 │   ├── api/games/search/route.ts   # 服务端代理 Bangumi 游戏搜索（type=4），带12分钟缓存
 │   ├── api/games/image/route.ts    # 抓图→校验→转存 Supabase，返回公开URL
 │   ├── api/games/thumbnail/route.ts# 抓图→返回二进制，供搜索结果即时展示
 │   ├── globals.css / layout.tsx / page.tsx
 ├── components/
-│   ├── HomeClient.tsx              # 主界面：登录/清单/广场(月份+排序)/点赞评论
+│   ├── HomeClient.tsx              # 主界面：登录/头图公告/清单/广场/点赞评论 + 移动端适配
 │   ├── SearchDialog.tsx            # 搜索弹窗（网格结果、缩略图回退、加载更多）
 │   └── identity.ts                 # 本地 owner_key（用于旧数据过户识别）
 ├── lib/
-│   ├── auth.ts                     # 密码哈希(scrypt)、HMAC 签名会话、当前用户
+│   ├── auth.ts                     # 密码哈希(scrypt)、HMAC 签名会话、当前用户、isAdmin
 │   ├── bangumi.ts                  # Bangumi 搜索：简繁双搜、去重、缓存、超时
 │   ├── image-guard.ts              # 图片白名单(lain.bgm.tv)+格式/大小/魔数校验
 │   ├── supabase.ts                 # Supabase 客户端（浏览器端 + 服务端）
-│   └── types.ts                    # 前后端共享类型
+│   └── types.ts                    # 前后端共享类型（含 SessionUser.role / SiteSettings）
 └── supabase/
     ├── schema.sql                  # 全新安装：建表 + RLS + 存储桶
-    └── migration-v2.sql            # 已有数据库升级：账户/点赞/评论 + 旧数据过户
+    ├── migration-v2.sql            # 升级：账户/点赞/评论 + 旧数据过户
+    └── migration-v3.sql            # 升级：管理员角色(role) + 站点设置(site_settings)
 ```
 
 ## 六、和你朋友方案的对应关系
