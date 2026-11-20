@@ -34,9 +34,10 @@ export default function HeroSection({ images, announcements, archived, isAdmin, 
 
   return (
     <section className="mb-6">
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* 宽屏：头图占 2 列、公告栏占 1 列（长 2:1），两者高度由网格拉伸保持一致 */}
+      <div className="grid gap-4 lg:grid-cols-3">
         {/* 头图：16:9，自动轮播 */}
-        <div className="relative aspect-video overflow-hidden rounded-2xl border border-butter-2 bg-gradient-to-br from-[#FFE9C4] via-[#FFF3DA] to-[#FFE1B0] shadow-card">
+        <div className="relative aspect-video overflow-hidden rounded-2xl border border-butter-2 bg-gradient-to-br from-[#FFE9C4] via-[#FFF3DA] to-[#FFE1B0] shadow-card lg:col-span-2">
           {count > 0 ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -82,8 +83,8 @@ export default function HeroSection({ images, announcements, archived, isAdmin, 
           )}
         </div>
 
-        {/* 公告栏：与头图等宽，比头图略矮，多条不滚动 */}
-        <div className="flex max-h-[calc(100%-0.5rem)] flex-col overflow-hidden rounded-2xl border border-butter-2 bg-white/85 shadow-card lg:max-h-full">
+        {/* 公告栏：与头图等高，多条不滚动，超出部分内部滚动 */}
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-butter-2 bg-white/85 shadow-card">
           <div className="flex items-center justify-between border-b border-butter-2 bg-cream-2/80 px-4 py-2.5">
             <span className="text-sm font-medium text-primary-dark">📢 公告栏</span>
             <span className="text-[11px] text-muted">{announcements.length} 条进行中</span>

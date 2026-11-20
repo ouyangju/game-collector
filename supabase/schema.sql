@@ -206,3 +206,56 @@ create index if not exists poll_votes_poll_idx on public.poll_votes (poll_id);
 create index if not exists poll_votes_option_idx on public.poll_votes (option_id);
 alter table public.poll_votes enable row level security;
 revoke all on table public.poll_votes from anon, authenticated;
+
+-- 11) 周推游戏：问题表（开始时间=创建时间，截止时间为具体日期时间，max_games=每人最多选 n 款）
+create table if not exists public.weekly_questions (
+  id           bigint generated always as identity primary key,
+  question     text not null,
+  max_games    integer not null default 3 check (max_games between 1 and 50),
+  created_by   uuid references public.users(id) on delete set null,
+  creator_name text not null default '',
+  created_at   timestamptz not null default now(),
+  ends_at      timestamptz not null
+);
+create index if not exists weekly_questions_created_idx on public.weekly_questions (created_at desc);
+alter table public.weekly_questions enable row level security;
+grant select on table public.weekly_questions to anon, authenticated;
+revoke insert, update, delete on table public.weekly_questions from anon, authenticated;
+drop policy if exists weekly_questions_read on public.weekly_questions;
+create policy weekly_questions_read on public.weekly_questions for select to anon, authenticated using (true);
+
+-- 12) 周推回答主表：每个用户对每个问题一条回答（同一问题内唯一）
+create table if not exists public.weekly_answers (
+  id          bigint generated always as identity primary key,
+  question_id bigint not null references public.weekly_questions(id) on delete cascade,
+  user_id     uuid not null references public.users(id) on delete cascade,
+  author_name text not null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  unique (question_id, user_id)
+);
+create index if not exists weekly_answers_question_idx on public.weekly_answers (question_id);
+alter table public.weekly_answers enable row level security;
+grant select on table public.weekly_answers to anon, authenticated;
+revoke insert, update, delete on table public.weekly_answers from anon, authenticated;
+drop policy if exists weekly_answers_read on public.weekly_answers;
+create policy weekly_answers_read on public.weekly_answers for select to anon, authenticated using (true);
+
+-- 13) 周推回答里的游戏（Bangumi 或自定义，无感想字段）
+create table if not exists public.weekly_answer_games (
+  id           bigint generated always as identity primary key,
+  answer_id    bigint not null references public.weekly_answers(id) on delete cascade,
+  subject_id   integer,
+  source       text not null default 'bangumi' check (source in ('bangumi', 'custom')),
+  title        text not null,
+  cover        text,
+  cover_source text,
+  platform     text,
+  position     integer not null default 0
+);
+create index if not exists weekly_answer_games_answer_idx on public.weekly_answer_games (answer_id, position);
+alter table public.weekly_answer_games enable row level security;
+grant select on table public.weekly_answer_games to anon, authenticated;
+revoke insert, update, delete on table public.weekly_answer_games from anon, authenticated;
+drop policy if exists weekly_answer_games_read on public.weekly_answer_games;
+create policy weekly_answer_games_read on public.weekly_answer_games for select to anon, authenticated using (true);

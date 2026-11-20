@@ -179,3 +179,59 @@ export type PollOptionInput = {
   cover_source: string | null;
   platform: string | null;
 };
+
+// ===== 周推游戏 =====
+
+// 回答里的一款游戏（Bangumi 或自定义上传，不含感想）
+export type WeeklyGame = {
+  id: number;
+  answer_id: number;
+  subject_id: number | null;
+  source: "bangumi" | "custom";
+  title: string;
+  cover: string | null;
+  cover_source: string | null;
+  platform: string | null;
+  position: number;
+};
+
+// 某用户对某问题的一组回答
+export type WeeklyAnswer = {
+  id: number;
+  question_id: number;
+  user_id: string;
+  author_name: string;
+  author_avatar: string | null;
+  created_at: string;
+  updated_at: string;
+  games: WeeklyGame[];
+};
+
+// 一个问题（含截止状态、每人最多选的游戏数）
+export type WeeklyQuestion = {
+  id: number;
+  question: string;
+  max_games: number;
+  created_by: string | null;
+  creator_name: string;
+  created_at: string;
+  ends_at: string;
+  status: "active" | "ended";
+  answers: WeeklyAnswer[];
+  my_answer_id: number | null;
+};
+
+export type WeeklyResponse = {
+  items: WeeklyQuestion[];
+  user: SessionUser | null;
+};
+
+// 用户提交回答时的单个游戏（复用上传/搜索流程，无感想字段）
+export type WeeklyGameInput = {
+  subject_id: number | null;
+  source: "bangumi" | "custom";
+  title: string;
+  cover: string | null;
+  cover_source: string | null;
+  platform: string | null;
+};

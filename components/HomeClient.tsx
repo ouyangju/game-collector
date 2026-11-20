@@ -8,6 +8,8 @@ import ProfileDialog from "./ProfileDialog";
 import MyHome from "./MyHome";
 import UserAvatar from "./UserAvatar";
 import HeroSection from "./HeroSection";
+import WeeklyPanel from "./WeeklyPanel";
+import WeeklyAnswerDialog from "./WeeklyAnswerDialog";
 import SiteEditor from "./SiteEditor";
 import CustomGameDialog from "./CustomGameDialog";
 import { getOwnerKey } from "./identity";
@@ -18,9 +20,10 @@ import type {
   GameHit,
   HeroImage,
   SessionUser,
+  WeeklyQuestion,
 } from "@/lib/types";
 
-type Tab = "mine" | "square" | "events";
+type Tab = "mine" | "square" | "events" | "weekly";
 type SortBy = "time" | "likes";
 
 function Stars({ value, onChange }: { value: number | null; onChange?: (n: number | null) => void }) {
@@ -279,6 +282,20 @@ export default function HomeClient() {
   const [commentsMap, setCommentsMap] = useState<Record<number, Comment[]>>({});
   const [commentsLoading, setCommentsLoading] = useState(false);
 
+  // 周推游戏
+  const [weekly, setWeekly] = useState<WeeklyQuestion[]>([]);
+  const [weeklyAnswerOpen, setWeeklyAnswerOpen] = useState<WeeklyQuestion | null>(null);
+
+  const loadWeekly = useCallback(async () => {
+    try {
+      const res = await fetch("/api/weekly", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok) setWeekly(json.items || []);
+    } catch {
+      // 周推读取失败不影响主功能
+    }
+  }, []);
+
   const loadSettings = useCallback(async () => {
     try {
       const [heroRes, noticeRes] = await Promise.all([
@@ -339,7 +356,8 @@ export default function HomeClient() {
     })();
     void load();
     void loadSettings();
-  }, [load, loadSettings]);
+    void loadWeekly();
+  }, [load, loadSettings, loadWeekly]);
 
   const doLogin = async () => {
     const username = loginUser.trim();
@@ -363,6 +381,7 @@ export default function HomeClient() {
       setLoginOpen(false);
       setLoginPass("");
       await load();
+      await loadWeekly();
     } catch (e) {
       setLoginError(e instanceof Error ? e.message : "登录失败");
     } finally {
@@ -382,6 +401,7 @@ export default function HomeClient() {
     setLoginUser("");
     setLoginPass("");
     setLoginOpen(true);
+    void loadWeekly();
   };
 
   const enterAsGuest = () => {
@@ -655,9 +675,10 @@ export default function HomeClient() {
         ) : null}
 
         <div className="mb-6 flex w-full rounded-full border border-butter-2 bg-cream-2 p-1 sm:inline-flex sm:w-auto">
-          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🏠 个人主页</button>
-          <button type="button" onClick={() => setTab("square")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
-          <button type="button" onClick={() => setTab("events")} className={`flex-1 rounded-full px-2 py-2 text-xs font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "events" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗳️ 活动</button>
+          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-1.5 py-2 text-[11px] font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🏠 个人主页</button>
+          <button type="button" onClick={() => setTab("square")} className={`flex-1 rounded-full px-1.5 py-2 text-[11px] font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
+          <button type="button" onClick={() => setTab("events")} className={`flex-1 rounded-full px-1.5 py-2 text-[11px] font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "events" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗳️ 活动</button>
+          <button type="button" onClick={() => setTab("weekly")} className={`flex-1 rounded-full px-1.5 py-2 text-[11px] font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "weekly" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗓️ 周推游戏</button>
         </div>
 
         {tab === "mine" ? (
@@ -668,6 +689,11 @@ export default function HomeClient() {
                 games={mine.length}
                 thoughts={mine.filter((e) => e.thoughts?.trim()).length}
                 onEdit={() => setProfileEditorOpen(true)}
+                weekly={weekly.find((q) => q.status === "active") || null}
+                onWeeklyAnswer={() => {
+                  const q = weekly.find((x) => x.status === "active");
+                  if (q) setWeeklyAnswerOpen(q);
+                }}
               />
             ) : (
               <section className="card p-5 text-center">
@@ -732,6 +758,15 @@ export default function HomeClient() {
           </div>
         ) : tab === "events" ? (
           <EventsPanel me={me} admin={admin} onLogin={() => setLoginOpen(true)} />
+        ) : tab === "weekly" ? (
+          <WeeklyPanel
+            items={weekly}
+            me={me}
+            admin={admin}
+            onChanged={loadWeekly}
+            onLogin={() => setLoginOpen(true)}
+            onAnswer={setWeeklyAnswerOpen}
+          />
         ) : (
           <section className="card fadein p-4 sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -865,6 +900,24 @@ export default function HomeClient() {
           me={me}
           onClose={() => setProfileEditorOpen(false)}
           onSaved={(updated, wasSelf) => onProfileSaved(updated, wasSelf)}
+        />
+      ) : null}
+
+      {weeklyAnswerOpen && me ? (
+        <WeeklyAnswerDialog
+          key={weeklyAnswerOpen.id}
+          open
+          question={weeklyAnswerOpen}
+          initialGames={(weeklyAnswerOpen.answers.find((a) => a.user_id === me.id)?.games || []).map((g) => ({
+            subject_id: g.subject_id,
+            source: g.source,
+            title: g.title,
+            cover: g.cover,
+            cover_source: g.cover_source,
+            platform: g.platform,
+          }))}
+          onClose={() => setWeeklyAnswerOpen(null)}
+          onSubmitted={loadWeekly}
         />
       ) : null}
     </>
