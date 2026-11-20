@@ -26,22 +26,32 @@ export async function GET(req: NextRequest) {
   // 聚合点赞数 / 评论数（表小，直接全量取，避免 N+1）
   const [{ data: likes }, { data: comments }] = await Promise.all([
     sb.from("likes").select("entry_id, user_id"),
-    sb.from("comments").select("entry_id"),
+    sb.from("comments").select("entry_id, author_name, content, created_at").order("created_at", { ascending: true }),
   ]);
   const likeCount = new Map<number, number>();
   const commentCount = new Map<number, number>();
+  const firstComment = new Map<number, { author_name: string; content: string; created_at: string }>();
   const likedSet = new Set<number>();
   (likes || []).forEach((l: { entry_id: number; user_id: string }) => {
     likeCount.set(l.entry_id, (likeCount.get(l.entry_id) || 0) + 1);
     if (user && l.user_id === user.id) likedSet.add(l.entry_id);
   });
-  (comments || []).forEach((c: { entry_id: number }) => {
+  (comments || []).forEach((c: { entry_id: number; author_name: string; content: string; created_at: string }) => {
     commentCount.set(c.entry_id, (commentCount.get(c.entry_id) || 0) + 1);
+    // 评论按时间升序，第一条即为最早评论
+    if (!firstComment.has(c.entry_id)) {
+      firstComment.set(c.entry_id, {
+        author_name: c.author_name,
+        content: c.content,
+        created_at: c.created_at,
+      });
+    }
   });
   items.forEach((e) => {
     e.like_count = likeCount.get(e.id) || 0;
     e.comment_count = commentCount.get(e.id) || 0;
     e.liked_by_me = likedSet.has(e.id);
+    e.first_comment = firstComment.get(e.id) || null;
   });
 
   // 发帖人头像/昵称索引：广场点击头像进主页用（v5 迁移前回退到只取昵称）
@@ -90,10 +100,16 @@ export async function POST(req: NextRequest) {
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(ownerKey)) {
     return NextResponse.json({ error: "身份标识无效" }, { status: 400 });
   }
-  const subjectId = Number(body.subject_id);
-  const title = String(body.title || "").slice(0, 120);
-  if (!subjectId || !title) {
-    return NextResponse.json({ error: "游戏信息不完整" }, { status: 400 });
+  // 自定义游戏：source=custom 且 subject_id 为空；Bangumi 游戏必须有 subject_id
+  const source = body.source === "custom" ? "custom" : "bangumi";
+  const rawSubject = Number(body.subject_id);
+  const subjectId = source === "custom" ? null : (rawSubject > 0 ? rawSubject : null);
+  const title = String(body.title || "").trim().slice(0, 120);
+  if (!title || (source === "bangumi" && !subjectId)) {
+    return NextResponse.json(
+      { error: source === "custom" ? "请填写游戏名称" : "游戏信息不完整" },
+      { status: 400 }
+    );
   }
 
   const sb = supabaseServer();
@@ -102,6 +118,7 @@ export async function POST(req: NextRequest) {
     user_id: user.id,
     owner_name: user.nickname,
     subject_id: subjectId,
+    source,
     title,
     cover: body.cover ? String(body.cover) : null,
     cover_source: body.cover_source ? String(body.cover_source) : null,

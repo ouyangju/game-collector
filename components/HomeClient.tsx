@@ -7,22 +7,21 @@ import ProfileEditor from "./ProfileEditor";
 import ProfileDialog from "./ProfileDialog";
 import MyHome from "./MyHome";
 import UserAvatar from "./UserAvatar";
+import HeroSection from "./HeroSection";
+import SiteEditor from "./SiteEditor";
+import CustomGameDialog from "./CustomGameDialog";
 import { getOwnerKey } from "./identity";
 import type {
+  Announcement,
   Comment,
   Entry,
   GameHit,
+  HeroImage,
   SessionUser,
-  SiteSettings,
 } from "@/lib/types";
 
 type Tab = "mine" | "square" | "events";
 type SortBy = "time" | "likes";
-
-const DEFAULT_SETTINGS: SiteSettings = {
-  hero_image: "",
-  announcement: "欢迎来到游戏墙！",
-};
 
 function Stars({ value, onChange }: { value: number | null; onChange?: (n: number | null) => void }) {
   const n = value || 0;
@@ -150,13 +149,29 @@ function PostCard({
         <Cover src={entry.cover} alt={entry.title} className="h-[104px] w-[76px] shrink-0 rounded-lg" />
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium" title={entry.title}>{entry.title}</div>
-          <div className="mt-0.5 truncate text-xs text-muted">{[entry.play_year, entry.platform, entry.bangumi_rating ? `Bangumi ${entry.bangumi_rating}` : ""].filter(Boolean).join(" · ")}</div>
+          <div className="mt-0.5 truncate text-xs text-muted">{[entry.play_year, entry.platform, entry.source === "custom" ? "自定义" : entry.bangumi_rating ? `Bangumi ${entry.bangumi_rating}` : ""].filter(Boolean).join(" · ")}</div>
           <div className="mt-1"><Stars value={entry.my_score} /></div>
         </div>
       </div>
 
       {entry.thoughts ? (
         <div className="thought-box mt-3 rounded-lg bg-cream-2 p-2.5 text-sm leading-relaxed text-ink">{entry.thoughts}</div>
+      ) : null}
+
+      {/* 默认展示第一条评论（未展开评论区时） */}
+      {!commentsOpen && entry.first_comment ? (
+        <div className="mt-2 rounded-lg border border-butter-2 bg-butter/15 p-2.5">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-medium text-primary-dark">{entry.first_comment.author_name}</span>
+            <span className="text-muted">评论：</span>
+          </div>
+          <p className="thought-box mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink">{entry.first_comment.content}</p>
+          {(entry.comment_count || 0) > 1 ? (
+            <button type="button" onClick={() => onToggleComments(entry)} className="mt-1 text-[11px] text-muted hover:text-primary-dark hover:underline">
+              查看全部 {entry.comment_count} 条评论 →
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="mt-3 flex items-center gap-2 border-t border-butter-2 pt-3">
@@ -201,78 +216,22 @@ function PostCard({
               );
             })
           )}
-          <div className="flex gap-2">
-            <input
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
-              maxLength={500}
-              placeholder="写下你的评论…"
-              className="input min-w-0 flex-1"
+              onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void send(); }}
+              maxLength={3000}
+              rows={3}
+              placeholder="写下你的评论…（支持换行，Ctrl/⌘ + Enter 发送）"
+              className="input min-w-0 flex-1 min-h-[76px] resize-y leading-relaxed"
             />
-            <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="btn shrink-0 px-3 sm:px-4">{sending ? "…" : "发送"}</button>
+            <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="btn shrink-0 self-end px-4 sm:px-4">{sending ? "…" : "发送"}</button>
           </div>
+          <div className="text-right text-[11px] text-muted">{draft.length}/3000</div>
         </div>
       ) : null}
     </article>
-  );
-}
-
-// 头图横幅 + 公告语 + 管理员编辑入口
-function HeroBanner({
-  settings,
-  isAdmin,
-  onEdit,
-}: {
-  settings: SiteSettings;
-  isAdmin: boolean;
-  onEdit: () => void;
-}) {
-  const hasHero = Boolean(settings.hero_image);
-  return (
-    <section className="relative mb-6 overflow-hidden rounded-2xl border border-butter-2 bg-gradient-to-br from-[#FFE9C4] via-[#FFF3DA] to-[#FFE1B0] shadow-card">
-      {hasHero ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={proxiedCover(settings.hero_image) || settings.hero_image}
-            alt="站点头图"
-            referrerPolicy="no-referrer"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/25 to-ink/5" />
-        </>
-      ) : (
-        <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/40 blur-2xl" />
-      )}
-      <div className="relative flex min-h-[190px] flex-col justify-between gap-4 p-5 sm:min-h-[230px] sm:p-7">
-        <div className="flex items-start justify-between gap-3">
-          <span className={`rounded-full px-3 py-1 text-[11px] font-medium backdrop-blur ${hasHero ? "bg-white/25 text-white" : "bg-primary/15 text-primary-dark"}`}>
-            🎲 {new Date().getFullYear()} 年度游戏分享
-          </span>
-          {isAdmin ? (
-            <button
-              type="button"
-              onClick={onEdit}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur transition ${hasHero ? "bg-white/25 text-white hover:bg-white/40" : "bg-white/80 text-primary-dark hover:bg-white"}`}
-            >
-              ✎ 编辑头图与公告
-            </button>
-          ) : null}
-        </div>
-
-        <div>
-          <h1 className={`text-3xl font-medium sm:text-4xl ${hasHero ? "text-white drop-shadow" : "text-ink"}`}>
-            🎮 游戏墙
-          </h1>
-          {settings.announcement ? (
-            <p className={`mt-2 max-w-2xl text-sm leading-relaxed sm:text-base ${hasHero ? "text-white/95 drop-shadow" : "text-muted"}`}>
-              📢 {settings.announcement}
-            </p>
-          ) : null}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -289,16 +248,14 @@ export default function HomeClient() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("mine");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
   const [configError, setConfigError] = useState("");
 
-  // 站点设置（头图 / 公告）
-  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
+  // 站点头图（多张轮播）/ 公告（多条 + 往期）
+  const [heroes, setHeroes] = useState<HeroImage[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [archived, setArchived] = useState<Announcement[]>([]);
   const [editSiteOpen, setEditSiteOpen] = useState(false);
-  const [draftAnnouncement, setDraftAnnouncement] = useState("");
-  const [uploadingHero, setUploadingHero] = useState(false);
-  const [savingSite, setSavingSite] = useState(false);
-  const [siteMsg, setSiteMsg] = useState("");
-  const heroInputRef = useRef<HTMLInputElement | null>(null);
 
   const admin = me?.role === "admin";
 
@@ -324,11 +281,21 @@ export default function HomeClient() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const res = await fetch("/api/settings", { cache: "no-store" });
-      const json = await res.json();
-      if (res.ok) setSettings({ ...DEFAULT_SETTINGS, ...json });
+      const [heroRes, noticeRes] = await Promise.all([
+        fetch("/api/settings/hero", { cache: "no-store" }),
+        fetch("/api/announcements", { cache: "no-store" }),
+      ]);
+      if (heroRes.ok) {
+        const heroJson = await heroRes.json();
+        setHeroes(heroJson.items || []);
+      }
+      if (noticeRes.ok) {
+        const noticeJson = await noticeRes.json();
+        setAnnouncements(noticeJson.active || []);
+        setArchived(noticeJson.archived || []);
+      }
     } catch {
-      // 站点设置读取失败不影响主功能
+      // 头图/公告读取失败不影响主功能
     }
   }, []);
 
@@ -433,69 +400,33 @@ export default function HomeClient() {
     await loadSettings();
   };
 
-  const openSiteEditor = () => {
-    setDraftAnnouncement(settings.announcement || "");
-    setSiteMsg("");
-    setEditSiteOpen(true);
-  };
+  const openSiteEditor = () => setEditSiteOpen(true);
 
-  const uploadHero = async (file: File) => {
-    setUploadingHero(true);
-    setSiteMsg("");
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/settings/upload", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "上传失败");
-      await loadSettings();
-      setSiteMsg("头图已更新 ✅");
-    } catch (e) {
-      setSiteMsg(e instanceof Error ? e.message : "上传失败");
-    } finally {
-      setUploadingHero(false);
-      if (heroInputRef.current) heroInputRef.current.value = "";
-    }
-  };
-
-  const clearHero = async () => {
-    setSavingSite(true);
-    setSiteMsg("");
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hero_image: "" }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "操作失败");
-      await loadSettings();
-      setSiteMsg("已恢复默认头图 ✅");
-    } catch (e) {
-      setSiteMsg(e instanceof Error ? e.message : "操作失败");
-    } finally {
-      setSavingSite(false);
-    }
-  };
-
-  const saveAnnouncement = async () => {
-    setSavingSite(true);
-    setSiteMsg("");
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ announcement: draftAnnouncement }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "保存失败");
-      await loadSettings();
-      setSiteMsg("公告已保存 ✅");
-    } catch (e) {
-      setSiteMsg(e instanceof Error ? e.message : "保存失败");
-    } finally {
-      setSavingSite(false);
-    }
+  // 自定义游戏写入清单（subject_id 为空、source=custom）
+  const addCustomGame = async (data: { title: string; platform: string; cover: string | null }) => {
+    if (!me) { setLoginOpen(true); return; }
+    const payload = {
+      owner_key: ownerKey,
+      source: "custom",
+      subject_id: null,
+      title: data.title,
+      cover: data.cover,
+      cover_source: null,
+      platform: data.platform || null,
+      air_date: null,
+      bangumi_rating: null,
+      thoughts: "",
+      my_score: null,
+      play_year: new Date().getFullYear(),
+    };
+    const r = await fetch("/api/entries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await r.json();
+    if (!r.ok) throw new Error(json.error || "加入清单失败");
+    await load();
   };
 
   const addGame = async (hit: GameHit) => {
@@ -512,6 +443,7 @@ export default function HomeClient() {
     }
     const payload = {
       owner_key: ownerKey,
+      source: "bangumi",
       subject_id: hit.id,
       title: hit.nameCn || hit.name,
       cover: coverUrl || hit.cover || null,
@@ -694,7 +626,13 @@ export default function HomeClient() {
 
       <main className="mx-auto max-w-6xl px-3 pb-16 sm:px-5 sm:pb-20">
         <div className="pt-5 sm:pt-7">
-          <HeroBanner settings={settings} isAdmin={admin} onEdit={openSiteEditor} />
+          <HeroSection
+            images={heroes}
+            announcements={announcements}
+            archived={archived}
+            isAdmin={admin}
+            onEdit={openSiteEditor}
+          />
         </div>
 
         <div className="mb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-center text-sm text-muted sm:gap-6">
@@ -743,14 +681,20 @@ export default function HomeClient() {
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-medium">🔍 添加游戏</h2>
-                  <p className="text-xs text-muted">从 Bangumi 搜索并自动本地化封面</p>
+                  <p className="text-xs text-muted">从 Bangumi 搜索，或自己上传封面与名字</p>
                 </div>
-                <button type="button" className="btn w-full sm:w-auto" onClick={() => {
-                  if (!me) { setLoginOpen(true); return; }
-                  setSearchOpen(true);
-                }}>＋ 搜索游戏</button>
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                  <button type="button" className="btn-ghost flex-1 sm:flex-none" onClick={() => {
+                    if (!me) { setLoginOpen(true); return; }
+                    setCustomOpen(true);
+                  }}>✏️ 自定义添加</button>
+                  <button type="button" className="btn flex-1 sm:flex-none" onClick={() => {
+                    if (!me) { setLoginOpen(true); return; }
+                    setSearchOpen(true);
+                  }}>＋ 搜索游戏</button>
+                </div>
               </div>
-              <p className="text-sm text-muted">点击右上角「搜索游戏」，输入名字后选择封面即可加入清单。封面由服务端抓取并保存到你自己的存储，不依赖 Bangumi 图床。</p>
+              <p className="text-sm text-muted">「搜索游戏」从 Bangumi 抓取封面；找不到条目时用「自定义添加」上传自己的图片和游戏名。</p>
             </section>
 
             <section className="card p-4 sm:p-6">
@@ -769,7 +713,7 @@ export default function HomeClient() {
                       <Cover src={e.cover} alt={e.title} className="h-[108px] w-[74px] shrink-0 rounded-lg sm:w-[78px]" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium" title={e.title}>{e.title}</div>
-                        <div className="mt-0.5 truncate text-xs text-muted">{[e.play_year, e.platform, e.bangumi_rating ? `Bangumi ${e.bangumi_rating}` : ""].filter(Boolean).join(" · ")}</div>
+                        <div className="mt-0.5 truncate text-xs text-muted">{[e.play_year, e.platform, e.source === "custom" ? "自定义" : e.bangumi_rating ? `Bangumi ${e.bangumi_rating}` : ""].filter(Boolean).join(" · ")}</div>
                         <div className="mt-1"><Stars value={e.my_score} /></div>
                         <div className={`thought-box mt-2 max-h-24 overflow-auto rounded-lg border border-dashed border-butter-2 bg-white/80 p-2 text-xs ${e.thoughts ? "text-ink" : "italic text-muted"}`}>
                           {e.thoughts || "还没写感想，点下面按钮记一笔吧～"}
@@ -855,56 +799,20 @@ export default function HomeClient() {
 
       <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={addGame} />
 
-      {editSiteOpen && admin ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-3 backdrop-blur-sm sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditSiteOpen(false); }}>
-          <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-5 shadow-2xl sm:p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium">✎ 编辑头图与公告</h3>
-              <button type="button" onClick={() => setEditSiteOpen(false)} aria-label="关闭" className="rounded-lg px-2 py-1 text-muted hover:bg-butter/30 hover:text-ink">✕</button>
-            </div>
-            <p className="mt-1 text-xs text-muted">仅管理员可见。保存后立即对所有人生效。</p>
+      <CustomGameDialog
+        open={customOpen}
+        onClose={() => setCustomOpen(false)}
+        onAdd={addCustomGame}
+      />
 
-            <label className="mt-5 block text-sm font-medium">站点头图</label>
-            {settings.hero_image ? (
-              <div className="relative mt-2 overflow-hidden rounded-xl border border-butter-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={proxiedCover(settings.hero_image) || settings.hero_image} alt="当前头图" referrerPolicy="no-referrer" className="h-36 w-full object-cover" />
-                <button type="button" onClick={() => void clearHero()} disabled={savingSite} className="absolute right-2 top-2 rounded-lg bg-ink/60 px-2.5 py-1 text-xs text-white hover:bg-ink/80 disabled:opacity-50">移除头图</button>
-              </div>
-            ) : (
-              <div className="mt-2 grid h-28 place-items-center rounded-xl border border-dashed border-butter-2 bg-cream-2 text-sm text-muted">当前使用默认渐变背景</div>
-            )}
-            <input
-              ref={heroInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadHero(f); }}
-            />
-            <button type="button" onClick={() => heroInputRef.current?.click()} disabled={uploadingHero} className="btn-ghost mt-2 w-full">
-              {uploadingHero ? "上传中…" : "📷 上传新头图（JPG/PNG/WebP，≤5MB）"}
-            </button>
-
-            <label className="mt-5 block text-sm font-medium">头部公告语</label>
-            <textarea
-              value={draftAnnouncement}
-              onChange={(e) => setDraftAnnouncement(e.target.value)}
-              maxLength={500}
-              rows={3}
-              placeholder="写一句欢迎语或公告…"
-              className="input mt-2 min-h-[90px] resize-y"
-            />
-            <div className="mt-1 text-right text-[11px] text-muted">{draftAnnouncement.length}/500</div>
-
-            {siteMsg ? <p className="mt-3 text-xs text-primary-dark">{siteMsg}</p> : null}
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setEditSiteOpen(false)} className="btn-ghost">完成</button>
-              <button type="button" onClick={() => void saveAnnouncement()} disabled={savingSite} className="btn">{savingSite ? "保存中…" : "保存公告"}</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <SiteEditor
+        open={editSiteOpen && admin}
+        onClose={() => setEditSiteOpen(false)}
+        heroes={heroes}
+        announcements={announcements}
+        archived={archived}
+        onChanged={loadSettings}
+      />
 
       {loginOpen && !me ? (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/50 p-4 backdrop-blur-sm">

@@ -30,7 +30,8 @@ create table if not exists public.game_list (
   owner_key     text not null,
   user_id       uuid references public.users(id) on delete set null,
   owner_name    text not null,
-  subject_id    integer not null,
+  subject_id    integer, -- 自定义上传的游戏为空
+  source        text not null default 'bangumi' check (source in ('bangumi', 'custom')),
   title         text not null,
   cover         text,
   cover_source  text,
@@ -105,6 +106,37 @@ insert into public.site_settings (key, value) values
   ('hero_image', ''),
   ('announcement', '欢迎来到游戏墙！搜一搜、记一记，把今年玩过的好游戏和心得分享给大家～')
 on conflict (key) do nothing;
+
+-- 6.1) 头图表：可上传多张，按 position 顺序自动轮播
+create table if not exists public.hero_images (
+  id         bigint generated always as identity primary key,
+  url        text not null,
+  position   integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists hero_images_position_idx on public.hero_images (position, id);
+alter table public.hero_images enable row level security;
+grant select on table public.hero_images to anon, authenticated;
+revoke insert, update, delete on table public.hero_images from anon, authenticated;
+drop policy if exists hero_images_read on public.hero_images;
+create policy hero_images_read on public.hero_images for select to anon, authenticated using (true);
+
+-- 6.2) 公告表：active 显示在主页公告栏，archived 为往期公告
+create table if not exists public.announcements (
+  id          bigint generated always as identity primary key,
+  title       text not null,
+  content     text not null default '',
+  status      text not null default 'active' check (status in ('active', 'archived')),
+  position    integer not null default 0,
+  created_at  timestamptz not null default now(),
+  archived_at timestamptz
+);
+create index if not exists announcements_status_idx on public.announcements (status, position, id);
+alter table public.announcements enable row level security;
+grant select on table public.announcements to anon, authenticated;
+revoke insert, update, delete on table public.announcements from anon, authenticated;
+drop policy if exists announcements_read on public.announcements;
+create policy announcements_read on public.announcements for select to anon, authenticated using (true);
 
 -- 7) 封面存储桶（公开读）
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

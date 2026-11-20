@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
   }
   const entryId = Number(body.entry_id);
-  const content = String(body.content || "").trim().slice(0, 500);
+  const content = String(body.content || "").trim().slice(0, 3000);
   if (!entryId || !content) {
     return NextResponse.json({ error: "评论内容不能为空" }, { status: 400 });
   }

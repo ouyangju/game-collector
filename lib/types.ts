@@ -31,6 +31,31 @@ export type SiteSettings = {
   announcement: string;
 };
 
+// 头图：可多张，按顺序自动轮播
+export type HeroImage = {
+  id: number;
+  url: string;
+  position: number;
+  created_at: string;
+};
+
+// 公告：active 在主页显示，archived 归入"往期公告"
+export type Announcement = {
+  id: number;
+  title: string;
+  content: string;
+  status: "active" | "archived";
+  position: number;
+  created_at: string;
+  archived_at: string | null;
+};
+
+export type HeroResponse = { items: HeroImage[] };
+export type AnnouncementsResponse = {
+  active: Announcement[];
+  archived: Announcement[];
+};
+
 export type Comment = {
   id: number;
   entry_id: number;
@@ -52,7 +77,8 @@ export type Entry = {
   owner_key: string;
   user_id: string | null;
   owner_name: string;
-  subject_id: number;
+  subject_id: number | null;
+  source?: "bangumi" | "custom";
   title: string;
   cover: string; // 本地化后的图片地址（Supabase Storage 公开 URL）
   cover_source: string | null;
@@ -66,6 +92,8 @@ export type Entry = {
   like_count?: number;
   comment_count?: number;
   liked_by_me?: boolean;
+  // 第一条评论的预览（广场默认展示）
+  first_comment?: { author_name: string; content: string; created_at: string } | null;
 };
 
 export type EntriesResponse = {

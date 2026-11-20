@@ -42,10 +42,11 @@ Supabase 提供 Postgres 数据库 + 图片存储，免费层对个人项目足�
 > 1. `supabase/migration-v2.sql`（加 `users`/`likes`/`comments` 表、给 `game_list` 加 `user_id` 列）—— 若已执行过可跳过；
 > 2. `supabase/migration-v3.sql`（加 `users.role` 管理员角色、`site_settings` 头图/公告表）—— 若已执行过可跳过；
 > 3. `supabase/migration-v4.sql`（加 `polls`/`poll_options`/`poll_votes` 投票三表）—— 投票功能，已执行可跳过；
-> 4. `supabase/migration-v5.sql`（给 `users` 加 `avatar`/`bio` 个人主页字段）—— **本次新增，必须执行**。
+> 4. `supabase/migration-v5.sql`（给 `users` 加 `avatar`/`bio` 个人主页字段）—— 个人主页功能，已执行可跳过；
+> 5. `supabase/migration-v6.sql`（自定义游戏、多张头图表、多条公告表；自动把旧的单张头图/单条公告迁进新表）—— **本次新增，必须执行**。
 >
 > 全都是增量语句、可重复执行，不会破坏已有数据。旧数据在账号首次登录时会自动过户到该账号。
-> 未执行 v5 也不会整站报错（头像/签名字段会自动降级为空），但个人主页功能不可用。
+> 未执行 v5/v6 也不会整站报错（相关功能自动降级为空），但新功能不可用。
 
 ---
 
@@ -93,6 +94,10 @@ npm run dev
 13. 切到「🏠 个人主页」→ 点「编辑主页」→ 可改姓名、上传头像或填 QQ 号一键读取昵称头像、写个性签名。**改姓名会同步修改登录账户名**，请记住新名字。
 14. 在「群友广场」点某条帖子的头像或昵称 → 进入 TA 的主页，可看头像、姓名、签名和 TA 发过的全部游戏与感想（只能看，不能改）。管理员会多出一个「编辑此主页」按钮，可代改他人资料。
 15. 未登录时登录框点「👀 游客浏览」→ 可浏览清单、广场、投票和他人主页；发帖、评论、点赞、投票会提示先登录。游客状态记在本机，关闭页面后仍保留，登录即自动退出游客态。
+16. 「🏠 个人主页 → 添加游戏」里点「✏️ 自定义添加」→ 上传自己的封面图、填游戏名（可不填平台）→ 加入清单，条目会标注「自定义」。
+17. 首页头图区：管理员点「✎ 编辑」→「头图」页签可连续上传多张、上下调顺序、删除；首页每 5 秒自动切换，下方圆点可手动切换。头图为 16:9，与右侧公告栏并排。
+18. 同一编辑弹窗的「公告」页签：可添加多条公告（标题 + 内容，建议 50–100 字）、编辑、点「归档」移入往期、删除或恢复。首页公告栏显示所有「进行中」公告（不滚动），底部「🗂️ 查看往期公告」弹窗查看已归档公告。旧的公告语会自动迁为第一条公告。
+19. 「🌈 群友广场」：有评论的帖子会默认显示第一条评论；点 💬 展开全部。评论框改为多行文本域，支持换行和长文（最多 3000 字），Ctrl/⌘ + Enter 发送。
 
 > **投票规则**：一人一票（同一投票内不可重复投票、不可改票）；投票进行中，未投票的普通用户只看到选项、不显示票数；投过票后或投票截止后才显示得票数与比例；投票人明细仅管理员可见。持续时间从创建时刻算起，到点自动转入「往期投票」。
 
@@ -236,8 +241,11 @@ game-collector-server/
 │   ├── api/profile/route.ts        # 个人主页读取(公开)/编辑(自己或管理员改他人)
 │   ├── api/profile/avatar/route.ts # 头像上传转存 Supabase（管理员可代传）
 │   ├── api/qq/lookup/route.ts      # QQ 号→昵称+官方头像，服务端代理并转存（QQ号不落库）
+│   ├── api/announcements/route.ts  # 公告增删查/归档/恢复（读公开、写仅管理员）
+│   ├── api/settings/hero/route.ts  # 多张头图上传/删除/排序（读公开、写仅管理员）
 │   ├── api/games/search/route.ts   # 服务端代理 Bangumi 游戏搜索（type=4），带12分钟缓存
 │   ├── api/games/image/route.ts    # 抓图→校验→转存 Supabase，返回公开URL
+│   ├── api/games/upload/route.ts   # 自定义游戏封面上传（需登录，校验后转存）
 │   ├── api/games/thumbnail/route.ts# 抓图→返回二进制，供搜索结果即时展示
 │   ├── globals.css / layout.tsx / page.tsx
 ├── components/
@@ -246,6 +254,10 @@ game-collector-server/
 │   ├── MyHome / ProfileDialog      # 个人主页资料卡 / 他人主页只读查看（管理员可编辑）
 │   ├── ProfileEditor.tsx           # 资料编辑：姓名/头像上传/QQ填入/签名
 │   ├── UserAvatar.tsx              # 通用头像（自定义图或姓名色块，可点击进主页）
+│   ├── HeroSection.tsx             # 头图轮播 + 公告栏并行布局（16:9 头图）
+│   ├── SiteEditor.tsx              # 管理员编辑多张头图与多条公告
+│   ├── PastAnnouncements.tsx       # 往期公告弹窗
+│   ├── CustomGameDialog.tsx        # 自定义添加游戏（自传封面+游戏名）
 │   ├── SearchDialog.tsx            # 搜索弹窗（网格结果、缩略图回退、加载更多、多选模式）
 │   └── identity.ts                 # 本地 owner_key（用于旧数据过户识别）
 ├── lib/
@@ -260,7 +272,8 @@ game-collector-server/
     ├── migration-v2.sql            # 升级：账户/点赞/评论 + 旧数据过户
     ├── migration-v3.sql            # 升级：管理员角色(role) + 站点设置(site_settings)
     ├── migration-v4.sql            # 升级：活动投票（polls/poll_options/poll_votes + RLS）
-    └── migration-v5.sql            # 升级：个人主页（users.avatar / users.bio）
+    ├── migration-v5.sql            # 升级：个人主页（users.avatar / users.bio）
+    └── migration-v6.sql            # 升级：自定义游戏 + 多张头图 + 多条公告（含旧数据迁移）
 ```
 
 ## 六、和你朋友方案的对应关系
