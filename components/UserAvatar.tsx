@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { avatarColor } from "./identity";
+import { proxiedCover } from "@/lib/img-proxy";
 
 type Props = {
   name: string;
@@ -23,7 +24,7 @@ export default function UserAvatar({ name, avatar, size = 40, className = "", on
   const inner = showImg ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={avatar || ""}
+      src={proxiedCover(avatar) || ""}
       alt={`${who} 的头像`}
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}

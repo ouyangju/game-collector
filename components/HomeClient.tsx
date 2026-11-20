@@ -10,6 +10,7 @@ import UserAvatar from "./UserAvatar";
 import HeroSection from "./HeroSection";
 import WeeklyPanel from "./WeeklyPanel";
 import WeeklyAnswerDialog from "./WeeklyAnswerDialog";
+import { proxiedCover } from "@/lib/img-proxy";
 import SiteEditor from "./SiteEditor";
 import CustomGameDialog from "./CustomGameDialog";
 import { getOwnerKey } from "./identity";
@@ -47,14 +48,6 @@ function Stars({ value, onChange }: { value: number | null; onChange?: (n: numbe
       )}
     </span>
   );
-}
-
-function proxiedCover(src: string | null): string | null {
-  if (!src) return null;
-  if (src.includes("lain.bgm.tv")) {
-    return `/api/games/thumbnail?url=${encodeURIComponent(src)}`;
-  }
-  return src;
 }
 
 function Cover({ src, alt, className }: { src: string | null; alt: string; className?: string }) {

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { Announcement, HeroImage } from "@/lib/types";
+import { proxiedCover } from "@/lib/img-proxy";
 
 type Props = {
   open: boolean;
@@ -151,7 +152,7 @@ export default function SiteEditor({ open, onClose, heroes, announcements, archi
               ) : heroes.map((h, i) => (
                 <div key={h.id} className="flex items-center gap-2 rounded-xl border border-butter-2 bg-cream-2 p-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={h.url} alt={`头图 ${i + 1}`} referrerPolicy="no-referrer" className="h-12 w-20 shrink-0 rounded-lg object-cover" />
+                  <img src={proxiedCover(h.url) || h.url} alt={`头图 ${i + 1}`} referrerPolicy="no-referrer" className="h-12 w-20 shrink-0 rounded-lg object-cover" />
                   <span className="w-5 shrink-0 text-xs text-muted">{i + 1}</span>
                   <div className="ml-auto flex shrink-0 items-center gap-1">
                     <button type="button" disabled={busy || i === 0} onClick={() => void moveHero(i, -1)} className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-butter/40 disabled:opacity-30" title="上移">↑</button>

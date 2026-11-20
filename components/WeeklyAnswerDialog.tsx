@@ -4,6 +4,7 @@ import { useState } from "react";
 import SearchDialog from "./SearchDialog";
 import CustomGameDialog from "./CustomGameDialog";
 import type { GameHit, WeeklyGameInput, WeeklyQuestion } from "@/lib/types";
+import { proxiedCover } from "@/lib/img-proxy";
 
 type Props = {
   open: boolean;
@@ -15,9 +16,7 @@ type Props = {
 };
 
 function coverSrc(src: string | null): string | null {
-  if (!src) return null;
-  if (src.includes("lain.bgm.tv")) return `/api/games/thumbnail?url=${encodeURIComponent(src)}`;
-  return src;
+  return proxiedCover(src);
 }
 
 // 回答周推问题：搜索/自定义上传选游戏（不写感想），至多 max_games 款

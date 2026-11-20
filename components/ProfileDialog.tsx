@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import UserAvatar from "./UserAvatar";
 import ProfileEditor from "./ProfileEditor";
 import type { ProfileResponse, SessionUser } from "@/lib/types";
+import { proxiedCover } from "@/lib/img-proxy";
 
 type Props = {
   userId: string;
@@ -12,12 +13,6 @@ type Props = {
   onClose: () => void;
   onProfileUpdated: () => void;
 };
-
-function proxiedCover(src: string | null): string | null {
-  if (!src) return null;
-  if (src.includes("lain.bgm.tv")) return `/api/games/thumbnail?url=${encodeURIComponent(src)}`;
-  return src;
-}
 
 // 访客查看他人主页：只能看，不能编辑；管理员额外看到"编辑主页"按钮。
 export default function ProfileDialog({ userId, me, admin, onClose, onProfileUpdated }: Props) {

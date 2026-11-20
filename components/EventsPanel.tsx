@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import SearchDialog from "./SearchDialog";
 import { avatarColor } from "./identity";
+import { proxiedCover } from "@/lib/img-proxy";
 import type {
   GameHit,
   Poll,
@@ -48,13 +49,9 @@ function timeLeft(endsAt: string, now: number): string {
   return `剩余 ${remain} 分钟`;
 }
 
-// 与清单一致的封面代理：Bangumi 图床走自家服务端
+// 与清单一致的封面代理：远程图床/Supabase 均走自家服务端
 function pollCover(src: string | null): string | null {
-  if (!src) return null;
-  if (src.includes("lain.bgm.tv")) {
-    return `/api/games/thumbnail?url=${encodeURIComponent(src)}`;
-  }
-  return src;
+  return proxiedCover(src);
 }
 
 function OptionCover({ src, alt }: { src: string | null; alt: string }) {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import UserAvatar from "./UserAvatar";
 import WeeklyAnswerDialog from "./WeeklyAnswerDialog";
 import type { SessionUser, WeeklyAnswer, WeeklyGameInput, WeeklyQuestion } from "@/lib/types";
+import { proxiedCover } from "@/lib/img-proxy";
 
 type Props = {
   items: WeeklyQuestion[];
@@ -15,9 +16,7 @@ type Props = {
 };
 
 function coverSrc(src: string | null): string | null {
-  if (!src) return null;
-  if (src.includes("lain.bgm.tv")) return `/api/games/thumbnail?url=${encodeURIComponent(src)}`;
-  return src;
+  return proxiedCover(src);
 }
 
 function formatDeadline(iso: string): string {

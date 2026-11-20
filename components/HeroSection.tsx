@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Announcement, HeroImage } from "@/lib/types";
 import PastAnnouncements from "./PastAnnouncements";
+import { proxiedCover } from "@/lib/img-proxy";
 
 type Props = {
   images: HeroImage[];
@@ -13,8 +14,7 @@ type Props = {
 };
 
 function displaySrc(url: string): string {
-  if (url.includes("lain.bgm.tv")) return `/api/games/thumbnail?url=${encodeURIComponent(url)}`;
-  return url;
+  return proxiedCover(url) || url;
 }
 
 // 首页头图（多张自动轮播）+ 公告栏（多条、不滚动）并行布局
