@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import UserAvatar from "./UserAvatar";
 import WeeklyAnswerDialog from "./WeeklyAnswerDialog";
 import type { SessionUser, WeeklyAnswer, WeeklyGameInput, WeeklyQuestion } from "@/lib/types";
@@ -26,19 +26,35 @@ function formatDeadline(iso: string): string {
   });
 }
 
+// 游戏卡片：大封面为主体，底部一条标题栏（超长省略），与参考图一致
 function GameChip({ title, cover, source }: { title: string; cover: string | null; source: "bangumi" | "custom" }) {
   const src = coverSrc(cover);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-butter-2 bg-cream-2 p-1.5">
-      <div className="grid h-9 w-7 shrink-0 place-items-center overflow-hidden rounded bg-[#FFF3DA]">
-        {src ? (
+    <div className="group min-w-0 overflow-hidden rounded-xl border border-butter-2 bg-white shadow-card transition hover:-translate-y-0.5 hover:shadow-lg">
+      <div className="relative aspect-square w-full overflow-hidden bg-[#FFF3DA]">
+        {src && !failed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={title} loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
-        ) : <span className="text-sm text-primary/25">🎮</span>}
+          <img
+            src={src}
+            alt={title}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center">
+            <span className="text-3xl text-primary/25">🎮</span>
+          </div>
+        )}
+        {source === "custom" ? (
+          <span className="absolute left-1.5 top-1.5 rounded-full bg-white/85 px-1.5 py-0.5 text-[10px] text-ink backdrop-blur">自定义</span>
+        ) : null}
       </div>
-      <div className="min-w-0">
+      <div className="border-t border-butter-2 bg-white/90 px-2 py-1.5">
         <div className="truncate text-xs font-medium" title={title}>{title}</div>
-        {source === "custom" ? <div className="text-[10px] text-muted">自定义</div> : null}
       </div>
     </div>
   );
@@ -66,7 +82,7 @@ function AnswerCard({ answer, me, editable, onEdit, onWithdraw }: {
           <button type="button" onClick={onWithdraw} className="text-muted hover:text-red-600 hover:underline">撤回</button>
         </div>
       ) : null}
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
         {answer.games.map((g) => (
           <GameChip key={g.id} title={g.title} cover={g.cover} source={g.source} />
         ))}
