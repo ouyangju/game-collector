@@ -11,6 +11,8 @@ import HeroSection from "./HeroSection";
 import WeeklyPanel from "./WeeklyPanel";
 import WeeklyAnswerDialog from "./WeeklyAnswerDialog";
 import { proxiedCover } from "@/lib/img-proxy";
+import RichText, { richTextToPlain } from "@/lib/richtext";
+import RichTextEditor from "./RichTextEditor";
 import SiteEditor from "./SiteEditor";
 import CustomGameDialog from "./CustomGameDialog";
 import { getOwnerKey } from "./identity";
@@ -151,7 +153,9 @@ function PostCard({
       </div>
 
       {entry.thoughts ? (
-        <div className="thought-box mt-3 rounded-lg bg-cream-2 p-2.5 text-sm leading-relaxed text-ink">{entry.thoughts}</div>
+        <div className="thought-box mt-3 rounded-lg bg-cream-2 p-2.5 text-sm leading-relaxed text-ink">
+          <RichText text={entry.thoughts} />
+        </div>
       ) : null}
 
       {/* 默认展示第一条评论（未展开评论区时） */}
@@ -161,7 +165,9 @@ function PostCard({
             <span className="font-medium text-primary-dark">{entry.first_comment.author_name}</span>
             <span className="text-muted">评论：</span>
           </div>
-          <p className="thought-box mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink">{entry.first_comment.content}</p>
+          <div className="thought-box mt-1 text-[13px] leading-relaxed text-ink">
+            <RichText text={entry.first_comment.content} />
+          </div>
           {(entry.comment_count || 0) > 1 ? (
             <button type="button" onClick={() => onToggleComments(entry)} className="mt-1 text-[11px] text-muted hover:text-primary-dark hover:underline">
               查看全部 {entry.comment_count} 条评论 →
@@ -207,24 +213,23 @@ function PostCard({
                       <button type="button" onClick={() => onDeleteComment(c)} className="ml-auto shrink-0 text-[11px] text-muted underline hover:text-red-600">删除</button>
                     ) : null}
                   </div>
-                  <div className="thought-box mt-1 text-ink">{c.content}</div>
+                  <div className="thought-box mt-1 text-ink"><RichText text={c.content} /></div>
                 </div>
               );
             })
           )}
           <div className="flex flex-col gap-2 sm:flex-row">
-            <textarea
+            <RichTextEditor
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void send(); }}
+              onChange={setDraft}
               maxLength={3000}
               rows={3}
-              placeholder="写下你的评论…（支持换行，Ctrl/⌘ + Enter 发送）"
-              className="input min-w-0 flex-1 min-h-[76px] resize-y leading-relaxed"
+              placeholder="写下你的评论…（Ctrl/⌘ + Enter 发送）"
+              className="min-w-0 flex-1"
+              onSubmitShortcut={() => void send()}
             />
             <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="btn shrink-0 self-end px-4 sm:px-4">{sending ? "…" : "发送"}</button>
           </div>
-          <div className="text-right text-[11px] text-muted">{draft.length}/3000</div>
         </div>
       ) : null}
     </article>
@@ -593,7 +598,7 @@ export default function HomeClient() {
     const list = entries.filter((e) => {
       if (monthKey(e.created_at) !== effectiveMonth) return false;
       if (!q) return true;
-      return [e.title, e.owner_name, e.thoughts].some((v) => String(v || "").toLowerCase().includes(q));
+      return [e.title, e.owner_name, richTextToPlain(e.thoughts)].some((v) => String(v || "").toLowerCase().includes(q));
     });
     list.sort((a, b) => sortBy === "likes"
       ? (b.like_count || 0) - (a.like_count || 0) || b.created_at.localeCompare(a.created_at)
@@ -735,7 +740,7 @@ export default function HomeClient() {
                         <div className="mt-0.5 truncate text-xs text-muted">{[e.play_year, e.platform, e.source === "custom" ? "自定义" : e.bangumi_rating ? `Bangumi ${e.bangumi_rating}` : ""].filter(Boolean).join(" · ")}</div>
                         <div className="mt-1"><Stars value={e.my_score} /></div>
                         <div className={`thought-box mt-2 max-h-24 overflow-auto rounded-lg border border-dashed border-butter-2 bg-white/80 p-2 text-xs ${e.thoughts ? "text-ink" : "italic text-muted"}`}>
-                          {e.thoughts || "还没写感想，点下面按钮记一笔吧～"}
+                          {e.thoughts ? <RichText text={e.thoughts} /> : "还没写感想，点下面按钮记一笔吧～"}
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <button type="button" onClick={() => openEdit(e)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark">{e.thoughts ? "编辑" : "写感想"}</button>
@@ -869,7 +874,13 @@ export default function HomeClient() {
             <label className="mt-4 block text-sm font-medium">我的评分</label>
             <div className="mt-1"><Stars value={editScore} onChange={setEditScore} /></div>
             <label className="mt-4 block text-sm font-medium">感想 / 心得</label>
-            <textarea value={editThoughts} maxLength={2000} onChange={(e) => setEditThoughts(e.target.value)} placeholder="这款游戏哪里打动了你？通关了吗？" className="input mt-2 min-h-[120px] resize-y" />
+            <RichTextEditor
+              value={editThoughts}
+              onChange={setEditThoughts}
+              maxLength={2000}
+              rows={5}
+              placeholder="这款游戏哪里打动了你？通关了吗？选中文字可加粗、加剧透黑框等格式"
+            />
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setEditEntry(null)} className="btn-ghost">取消</button>
               <button type="button" onClick={() => void saveEdit()} disabled={saving} className="btn">{saving ? "保存中…" : "保存"}</button>

@@ -64,6 +64,68 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   word-break: break-word;
 }
 
+/* ===== 轻量富文本 ===== */
+.rt-root { white-space: pre-wrap; word-break: break-word; }
+.rt-quote {
+  border-left: 3px solid var(--butter, #f0d9a8);
+  padding-left: 0.6rem;
+  color: var(--muted, #7a6f5f);
+  margin: 0.15rem 0;
+}
+.rt-list { padding-left: 0.2rem; margin: 0.1rem 0; }
+.rt-bullet { display: inline-block; width: 1rem; color: var(--primary, #c8762f); }
+.rt-code {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  padding: 0.05em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+.rt-link { color: var(--primary-dark, #9a5a1f); text-decoration: underline; text-underline-offset: 2px; }
+
+/* 剧透：默认与背景同色，左键拖动选中时通过 ::selection 显形，点击也可显形 */
+.rt-spoiler {
+  background: #2b2622;
+  color: #2b2622;
+  border-radius: 3px;
+  padding: 0 2px;
+  cursor: pointer;
+  user-select: text;
+  transition: background .2s, color .2s;
+}
+.rt-spoiler::selection { background: #ffe08a; color: #1a1a1a; }
+.rt-spoiler-shown { background: #fff3d6; color: var(--ink, #3b2a1e); box-shadow: inset 0 0 0 1px var(--butter-line, #eed8aa); }
+
+/* 富文本编辑器工具栏 */
+.rt-editor { width: 100%; }
+.rt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border: 1px solid var(--butter-line, #eed8aa);
+  border-radius: 10px 10px 0 0;
+  background: var(--cream-2, #fffcf4);
+}
+.rt-tool {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink, #2b2622);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .15s;
+}
+.rt-tool:hover { background: var(--butter, #f0d9a8); }
+.rt-tool-spoiler { background: #2b2622; color: #2b2622; }
+.rt-tool-spoiler:hover { color: #fff; }
+.rt-editor textarea { border-top-left-radius: 0; border-top-right-radius: 0; }
+
 /* 移动端细节：保证长文本与按钮不撑破卡片 */
 .card, article { min-width: 0; }
 .truncate { min-width: 0; }

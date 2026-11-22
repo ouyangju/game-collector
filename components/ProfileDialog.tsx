@@ -5,6 +5,7 @@ import UserAvatar from "./UserAvatar";
 import ProfileEditor from "./ProfileEditor";
 import type { ProfileResponse, SessionUser } from "@/lib/types";
 import { proxiedCover } from "@/lib/img-proxy";
+import RichText from "@/lib/richtext";
 
 type Props = {
   userId: string;
@@ -115,7 +116,7 @@ export default function ProfileDialog({ userId, me, admin, onClose, onProfileUpd
                         </div>
                         {e.thoughts ? (
                           <div className="thought-box mt-1.5 max-h-20 overflow-auto rounded-lg bg-cream-2 p-2 text-xs leading-relaxed text-ink">
-                            {e.thoughts}
+                            <RichText text={e.thoughts} />
                           </div>
                         ) : null}
                         {e.my_score ? (
