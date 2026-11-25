@@ -13,6 +13,8 @@ import WeeklyAnswerDialog from "./WeeklyAnswerDialog";
 import { proxiedCover } from "@/lib/img-proxy";
 import RichText, { richTextToPlain } from "@/lib/richtext";
 import RichTextEditor from "./RichTextEditor";
+import DraftBox from "./DraftBox";
+import { draftId, deleteDraft, loadDrafts, saveDraft, type Draft, type DraftKind } from "@/lib/drafts";
 import SiteEditor from "./SiteEditor";
 import CustomGameDialog from "./CustomGameDialog";
 import { getOwnerKey } from "./identity";
@@ -95,6 +97,8 @@ function PostCard({
   posterAvatar,
   posterName,
   onOpenProfile,
+  onSaveDraft,
+  prefill,
 }: {
   entry: Entry;
   me: SessionUser | null;
@@ -109,11 +113,18 @@ function PostCard({
   posterAvatar?: string | null;
   posterName?: string;
   onOpenProfile: (userId: string) => void;
+  onSaveDraft: (entry: Entry, text: string) => void;
+  prefill?: { entryId: number; content: string; nonce: number } | null;
 }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const isMine = me ? (entry.user_id ? entry.user_id === me.id : entry.owner_key === ownerKey) : false;
   const who = entry.user_id && posterName ? posterName : (entry.owner_name || "匿名群友");
+
+  // 评论草稿从草稿箱回填
+  useEffect(() => {
+    if (prefill && prefill.entryId === entry.id) setDraft(prefill.content);
+  }, [prefill, entry.id]);
 
   const send = async () => {
     const text = draft.trim();
@@ -228,7 +239,10 @@ function PostCard({
               className="min-w-0 flex-1"
               onSubmitShortcut={() => void send()}
             />
-            <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="btn shrink-0 self-end px-4 sm:px-4">{sending ? "…" : "发送"}</button>
+            <div className="flex shrink-0 items-end gap-2 self-end">
+              <button type="button" onClick={() => onSaveDraft(entry, draft)} disabled={!draft.trim()} className="btn-ghost px-3 py-2 text-xs disabled:opacity-40">💾 存草稿</button>
+              <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="btn shrink-0 px-4 sm:px-4">{sending ? "…" : "发送"}</button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -271,6 +285,12 @@ export default function HomeClient() {
   const [editThoughts, setEditThoughts] = useState("");
   const [editScore, setEditScore] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // 草稿箱（存本机，按用户/访客隔离）
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [draftBoxOpen, setDraftBoxOpen] = useState(false);
+  const [commentPrefill, setCommentPrefill] = useState<{ entryId: number; content: string; nonce: number } | null>(null);
+  const draftScope = me?.id ? `user:${me.id}` : `guest:${ownerKey || "anon"}`;
 
   const [squareQuery, setSquareQuery] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
@@ -506,6 +526,7 @@ export default function HomeClient() {
       });
       const json = await r.json();
       if (!r.ok) throw new Error(json.error || "保存失败");
+      removeDraft(draftId("thoughts", editEntry.id));
       setEditEntry(null);
       await load();
     } catch (e) {
@@ -566,6 +587,8 @@ export default function HomeClient() {
     });
     const json = await res.json();
     if (!res.ok) { alert(json.error || "评论失败"); return false; }
+    removeDraft(draftId("comment", e.id));
+    setCommentPrefill((prev) => prev?.entryId === e.id ? null : prev);
     setCommentsMap((prev) => ({ ...prev, [e.id]: [...(prev[e.id] || []), json.item] }));
     setEntries((prev) => prev.map((x) => x.id === e.id ? { ...x, comment_count: (x.comment_count || 0) + 1 } : x));
     return true;
@@ -578,6 +601,50 @@ export default function HomeClient() {
     if (!res.ok) { alert(json.error || "删除失败"); return; }
     setCommentsMap((prev) => ({ ...prev, [c.entry_id]: (prev[c.entry_id] || []).filter((x) => x.id !== c.id) }));
     setEntries((prev) => prev.map((x) => x.id === c.entry_id ? { ...x, comment_count: Math.max(0, (x.comment_count || 0) - 1) } : x));
+  };
+
+  // ---------- 草稿箱 ----------
+  useEffect(() => {
+    if (draftScope) setDrafts(loadDrafts(draftScope));
+  }, [draftScope]);
+
+  const storeDraft = (kind: DraftKind, e: Entry, content: string, score: number | null) => {
+    const d: Draft = {
+      id: draftId(kind, e.id),
+      kind,
+      entryId: e.id,
+      entryTitle: e.title,
+      entryCover: e.cover,
+      content,
+      score,
+      savedAt: Date.now(),
+    };
+    setDrafts(saveDraft(draftScope, d));
+  };
+
+  const removeDraft = (id: string) => setDrafts(deleteDraft(draftScope, id));
+
+  const loadDraftIntoEditor = (d: Draft) => {
+    const e = entries.find((x) => x.id === d.entryId);
+    setDraftBoxOpen(false);
+    if (!e) {
+      alert("这款游戏已不在清单中，无法恢复草稿");
+      return;
+    }
+    if (d.kind === "thoughts") {
+      setTab("mine");
+      setEditEntry(e);
+      setEditThoughts(d.content);
+      setEditScore(d.score);
+    } else {
+      // 评论草稿：跳到广场对应月份、展开评论并回填输入框
+      setTab("square");
+      setSquareQuery("");
+      setMonthFilter(monthKey(e.created_at));
+      setOpenComments(e.id);
+      if (!commentsMap[e.id]) void loadComments(e.id);
+      setCommentPrefill({ entryId: e.id, content: d.content, nonce: Date.now() });
+    }
   };
 
   const mine = useMemo(() => entries.filter((e) =>
@@ -633,6 +700,17 @@ export default function HomeClient() {
               {me ? <>你好，<b>{me.nickname}</b></> : guest ? "游客浏览中" : "未登录"}
             </span>
             {admin ? <span className="hidden rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary-dark sm:inline">管理员</span> : null}
+            <button
+              type="button"
+              onClick={() => setDraftBoxOpen(true)}
+              className="relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-primary-dark hover:bg-butter/30"
+              title="打开草稿箱"
+            >
+              📝<span className="hidden sm:inline">草稿箱</span>
+              {drafts.length > 0 ? (
+                <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] text-white">{drafts.length}</span>
+              ) : null}
+            </button>
             {me ? (
               <button type="button" onClick={() => void doLogout()} className="text-xs text-muted underline hover:text-primary-dark">退出</button>
             ) : (
@@ -820,6 +898,11 @@ export default function HomeClient() {
                     posterAvatar={e.user_id ? userMap[e.user_id]?.avatar : null}
                     posterName={e.user_id ? userMap[e.user_id]?.nickname : undefined}
                     onOpenProfile={(uid) => setProfileOpen(uid)}
+                    onSaveDraft={(entry, text) => {
+                      storeDraft("comment", entry, text, null);
+                      alert("评论草稿已存入草稿箱");
+                    }}
+                    prefill={commentPrefill?.entryId === e.id ? commentPrefill : null}
                   />
                 ))}
               </div>
@@ -868,22 +951,34 @@ export default function HomeClient() {
 
       {editEntry ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditEntry(null); }}>
-          <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-6 shadow-2xl">
-            <h3 className="text-lg font-medium">写下游玩感想</h3>
-            <p className="mt-1 text-xs text-muted">{editEntry.title}</p>
-            <label className="mt-4 block text-sm font-medium">我的评分</label>
+          <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-5 shadow-2xl sm:p-7">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-medium sm:text-xl">写下游玩感想</h3>
+                <p className="mt-1 text-xs text-muted">{editEntry.title}</p>
+              </div>
+              <button type="button" onClick={() => setEditEntry(null)} aria-label="关闭" className="rounded-lg px-2 py-1 text-muted hover:bg-butter/30 hover:text-ink">✕</button>
+            </div>
+            <label className="mt-5 block text-sm font-medium">我的评分</label>
             <div className="mt-1"><Stars value={editScore} onChange={setEditScore} /></div>
             <label className="mt-4 block text-sm font-medium">感想 / 心得</label>
             <RichTextEditor
               value={editThoughts}
               onChange={setEditThoughts}
               maxLength={2000}
-              rows={5}
+              rows={9}
+              textareaClassName="min-h-[180px] sm:min-h-[260px] text-sm sm:text-base"
               placeholder="这款游戏哪里打动了你？通关了吗？选中文字可加粗、加剧透黑框等格式"
             />
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { storeDraft("thoughts", editEntry, editThoughts, editScore); alert("感想草稿已存入草稿箱"); }}
+                disabled={!editThoughts.trim() && editScore === null}
+                className="btn-ghost disabled:opacity-40"
+              >💾 存草稿</button>
               <button type="button" onClick={() => setEditEntry(null)} className="btn-ghost">取消</button>
-              <button type="button" onClick={() => void saveEdit()} disabled={saving} className="btn">{saving ? "保存中…" : "保存"}</button>
+              <button type="button" onClick={() => void saveEdit()} disabled={saving} className="btn">{saving ? "保存中…" : "保存感想"}</button>
             </div>
           </div>
         </div>
@@ -924,6 +1019,14 @@ export default function HomeClient() {
           onSubmitted={loadWeekly}
         />
       ) : null}
+
+      <DraftBox
+        open={draftBoxOpen}
+        drafts={drafts}
+        onClose={() => setDraftBoxOpen(false)}
+        onLoad={loadDraftIntoEditor}
+        onDelete={removeDraft}
+      />
     </>
   );
 }

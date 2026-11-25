@@ -16,6 +16,8 @@ type Props = {
   rows?: number;
   placeholder?: string;
   className?: string;
+  /** 文本域自身的类名（用于放大特定场景的输入框） */
+  textareaClassName?: string;
   /** Ctrl/⌘ + Enter 的回调（评论发送用） */
   onSubmitShortcut?: () => void;
 };
@@ -49,6 +51,7 @@ export default function RichTextEditor({
   rows = 4,
   placeholder,
   className = "",
+  textareaClassName = "",
   onSubmitShortcut,
 }: Props) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
@@ -148,7 +151,7 @@ export default function RichTextEditor({
         maxLength={maxLength}
         rows={rows}
         placeholder={placeholder}
-        className="input mt-1 resize-y leading-relaxed"
+        className={`input mt-1 resize-y leading-relaxed ${textareaClassName}`}
       />
       <div className="mt-0.5 text-right text-[11px] text-muted">
         {value.length}/{maxLength}
