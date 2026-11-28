@@ -235,3 +235,28 @@ export type WeeklyGameInput = {
   cover_source: string | null;
   platform: string | null;
 };
+
+// ===== 美图分享 =====
+
+// 一次分享：多张图片 + 一段文字 + 上传者/时间 + 点赞统计
+export type Photo = {
+  id: number;
+  user_id: string;
+  owner_name: string;
+  avatar: string | null;
+  images: string[];
+  caption: string;
+  created_at: string;
+  like_count: number;
+  liked_by_me: boolean;
+};
+
+export type PhotosResponse = {
+  items: Photo[];
+  total: number;      // 筛选后的总条数
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  dates: string[];    // 有分享的日期列表（YYYY-MM-DD，倒序）供筛选
+  user: SessionUser | null;
+};

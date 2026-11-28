@@ -259,3 +259,35 @@ grant select on table public.weekly_answer_games to anon, authenticated;
 revoke insert, update, delete on table public.weekly_answer_games from anon, authenticated;
 drop policy if exists weekly_answer_games_read on public.weekly_answer_games;
 create policy weekly_answer_games_read on public.weekly_answer_games for select to anon, authenticated using (true);
+
+-- 14) 美图分享：一条记录 = 一次分享（多张图片 + 文字）
+create table if not exists public.photos (
+  id           bigint generated always as identity primary key,
+  user_id      uuid not null references public.users(id) on delete cascade,
+  owner_name   text not null,
+  images       jsonb not null default '[]'::jsonb,
+  caption      text not null default '',
+  created_at   timestamptz not null default now()
+);
+create index if not exists photos_created_idx on public.photos (created_at desc);
+create index if not exists photos_user_idx on public.photos (user_id);
+alter table public.photos enable row level security;
+grant select on table public.photos to anon, authenticated;
+revoke insert, update, delete on table public.photos from anon, authenticated;
+drop policy if exists photos_read on public.photos;
+create policy photos_read on public.photos for select to anon, authenticated using (true);
+
+-- 15) 美图点赞：一人一赞，删除分享时级联删除
+create table if not exists public.photo_likes (
+  id         bigint generated always as identity primary key,
+  photo_id   bigint not null references public.photos(id) on delete cascade,
+  user_id    uuid not null references public.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (photo_id, user_id)
+);
+create index if not exists photo_likes_photo_idx on public.photo_likes (photo_id);
+alter table public.photo_likes enable row level security;
+grant select on table public.photo_likes to anon, authenticated;
+revoke insert, update, delete on table public.photo_likes from anon, authenticated;
+drop policy if exists photo_likes_read on public.photo_likes;
+create policy photo_likes_read on public.photo_likes for select to anon, authenticated using (true);

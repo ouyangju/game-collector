@@ -14,6 +14,7 @@ import { proxiedCover } from "@/lib/img-proxy";
 import RichText, { richTextToPlain } from "@/lib/richtext";
 import RichTextEditor from "./RichTextEditor";
 import DraftBox from "./DraftBox";
+import PhotosPanel from "./PhotosPanel";
 import { draftId, deleteDraft, loadDrafts, saveDraft, type Draft, type DraftKind } from "@/lib/drafts";
 import SiteEditor from "./SiteEditor";
 import CustomGameDialog from "./CustomGameDialog";
@@ -28,7 +29,7 @@ import type {
   WeeklyQuestion,
 } from "@/lib/types";
 
-type Tab = "mine" | "square" | "events" | "weekly";
+type Tab = "mine" | "square" | "events" | "weekly" | "photos";
 type SortBy = "time" | "likes";
 
 function Stars({ value, onChange }: { value: number | null; onChange?: (n: number | null) => void }) {
@@ -751,10 +752,11 @@ export default function HomeClient() {
         ) : null}
 
         <div className="mb-6 flex w-full rounded-full border border-butter-2 bg-cream-2 p-1 sm:inline-flex sm:w-auto">
-          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-1.5 py-2 text-[11px] font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🏠 个人主页</button>
-          <button type="button" onClick={() => setTab("square")} className={`flex-1 rounded-full px-1.5 py-2 text-[11px] font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
-          <button type="button" onClick={() => setTab("events")} className={`flex-1 rounded-full px-1.5 py-2 text-[11px] font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "events" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗳️ 活动</button>
-          <button type="button" onClick={() => setTab("weekly")} className={`flex-1 rounded-full px-1.5 py-2 text-[11px] font-medium transition sm:flex-none sm:px-5 sm:text-sm ${tab === "weekly" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗓️ 周推游戏</button>
+          <button type="button" onClick={() => setTab("mine")} className={`flex-1 rounded-full px-1 py-2 text-[11px] font-medium transition sm:flex-none sm:px-4 sm:text-sm ${tab === "mine" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🏠 个人主页</button>
+          <button type="button" onClick={() => setTab("square")} className={`flex-1 rounded-full px-1 py-2 text-[11px] font-medium transition sm:flex-none sm:px-4 sm:text-sm ${tab === "square" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🌈 群友广场</button>
+          <button type="button" onClick={() => setTab("events")} className={`flex-1 rounded-full px-1 py-2 text-[11px] font-medium transition sm:flex-none sm:px-4 sm:text-sm ${tab === "events" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗳️ 活动</button>
+          <button type="button" onClick={() => setTab("weekly")} className={`flex-1 rounded-full px-1 py-2 text-[11px] font-medium transition sm:flex-none sm:px-4 sm:text-sm ${tab === "weekly" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🗓️ 周推游戏</button>
+          <button type="button" onClick={() => setTab("photos")} className={`flex-1 rounded-full px-1 py-2 text-[11px] font-medium transition sm:flex-none sm:px-4 sm:text-sm ${tab === "photos" ? "bg-primary text-white shadow-card" : "text-muted hover:text-ink"}`}>🖼️ 美图分享</button>
         </div>
 
         {tab === "mine" ? (
@@ -842,6 +844,13 @@ export default function HomeClient() {
             onChanged={loadWeekly}
             onLogin={() => setLoginOpen(true)}
             onAnswer={setWeeklyAnswerOpen}
+          />
+        ) : tab === "photos" ? (
+          <PhotosPanel
+            me={me}
+            admin={admin}
+            onLogin={() => setLoginOpen(true)}
+            onOpenProfile={(uid) => setProfileOpen(uid)}
           />
         ) : (
           <section className="card fadein p-4 sm:p-6">

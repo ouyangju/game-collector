@@ -44,10 +44,11 @@ Supabase 提供 Postgres 数据库 + 图片存储，免费层对个人项目足�
 > 3. `supabase/migration-v4.sql`（加 `polls`/`poll_options`/`poll_votes` 投票三表）—— 投票功能，已执行可跳过；
 > 4. `supabase/migration-v5.sql`（给 `users` 加 `avatar`/`bio` 个人主页字段）—— 个人主页功能，已执行可跳过；
 > 5. `supabase/migration-v6.sql`（自定义游戏、多张头图表、多条公告表；自动把旧的单张头图/单条公告迁进新表）—— 已执行可跳过；
-> 6. `supabase/migration-v7.sql`（周推游戏：问题表 + 回答表 + 回答游戏表）—— **本次新增，必须执行**。
+> 6. `supabase/migration-v7.sql`（周推游戏：问题表 + 回答表 + 回答游戏表）—— 已执行可跳过；
+> 7. `supabase/migration-v8.sql`（美图分享：`photos` 表 + `photo_likes` 点赞表）—— **本次新增，必须执行**。
 >
 > 全都是增量语句、可重复执行，不会破坏已有数据。旧数据在账号首次登录时会自动过户到该账号。
-> 未执行 v5/v6/v7 也不会整站报错（相关功能自动降级为空），但新功能不可用。
+> 未执行 v5/v6/v7/v8 也不会整站报错（相关功能自动降级为空），但新功能不可用。
 
 ---
 
@@ -108,6 +109,7 @@ npm run dev
     - **B** 粗体 `**文字**`、**I** 斜体 `*文字*`、**U** 下划线 `__文字__`、**S** 删除线 `~~文字~~`、行内代码 `` `代码` ``、链接 `[文字](https://…)`、引用 `> `、列表 `- `。
     - 标记以纯文本存储，**无需数据库改动**；渲染时解析为 React 元素（不使用 innerHTML），链接仅放行 http/https，防止注入。搜索会自动忽略标记符号。
 25. **草稿箱**：写感想或发评论时点「💾 存草稿」，内容（含富文本标记、评分）会存到本机浏览器，右上角 📝 草稿箱可查看（带未读数量角标）。点「继续编辑」会跳到对应游戏/帖子并回填内容；正式保存感想或发出评论后对应草稿自动清除。**草稿仅存本机、按账号隔离，不跨设备同步，无需数据库改动**。电脑端感想编辑弹窗已加宽、文本域加大，方便写长文。
+26. **🖼️ 美图分享**：与广场并列的新板块。登录后点「＋ 分享美图」可**一次上传多张图片**（JPG/PNG/WebP，单张 ≤10MB，最多 20 张）并为它们写一段文字（支持富文本/剧透黑框）。每条分享展示上传者头像昵称（可点进主页）、上传时间、图片和文字；可点赞（一人一赞，再点取消）；管理员可删除。**每页最多 10 条分享**，超出可翻页；顶部可按日期（中国时区）筛选，日期下拉只列出有分享的日期。
 
 > **投票规则**：一人一票（同一投票内不可重复投票、不可改票）；投票进行中，未投票的普通用户只看到选项、不显示票数；投过票后或投票截止后才显示得票数与比例；投票人明细仅管理员可见。持续时间从创建时刻算起，到点自动转入「往期投票」。
 
@@ -255,6 +257,9 @@ game-collector-server/
 │   ├── api/settings/hero/route.ts  # 多张头图上传/删除/排序（读公开、写仅管理员）
 │   ├── api/weekly/route.ts         # 周推问题列表/发起(管理员)/删除(管理员)
 │   ├── api/weekly/answer/route.ts  # 周推回答提交修改(至多n款无感想)/撤回
+│   ├── api/photos/route.ts         # 美图列表(分页/日期筛选)/发布/管理员删除
+│   ├── api/photos/upload/route.ts  # 美图上传转存 Supabase（需登录）
+│   ├── api/photos/like/route.ts    # 美图点赞/取消（一人一赞）
 │   ├── api/games/search/route.ts   # 服务端代理 Bangumi 游戏搜索（type=4），带12分钟缓存
 │   ├── api/games/image/route.ts    # 抓图→校验→转存 Supabase，返回公开URL
 │   ├── api/games/upload/route.ts   # 自定义游戏封面上传（需登录，校验后转存）
@@ -271,6 +276,7 @@ game-collector-server/
 │   ├── PastAnnouncements.tsx       # 往期公告弹窗
 │   ├── CustomGameDialog.tsx        # 自定义添加游戏（自传封面+游戏名）
 │   ├── WeeklyPanel.tsx             # 周推游戏展示区/发起问题/往期问题弹窗
+│   ├── PhotosPanel.tsx             # 美图分享：多图上传+文字/展示/点赞/分页/日期筛选
 │   ├── WeeklyAnswerDialog.tsx      # 周推回答弹窗（搜索+自定义选游戏，无感想）
 │   ├── RichTextEditor.tsx          # 富文本编辑工具栏（剧透/粗斜体/下划线/删除线/链接等）
 │   ├── DraftBox.tsx                # 草稿箱弹窗（继续编辑/删除本机草稿）
@@ -293,7 +299,8 @@ game-collector-server/
     ├── migration-v4.sql            # 升级：活动投票（polls/poll_options/poll_votes + RLS）
     ├── migration-v5.sql            # 升级：个人主页（users.avatar / users.bio）
     ├── migration-v6.sql            # 升级：自定义游戏 + 多张头图 + 多条公告（含旧数据迁移）
-    └── migration-v7.sql            # 升级：周推游戏（问题/回答/回答游戏三表 + RLS）
+    ├── migration-v7.sql            # 升级：周推游戏（问题/回答/回答游戏三表 + RLS）
+    └── migration-v8.sql            # 升级：美图分享（photos/photo_likes 两表 + RLS）
 ```
 
 ## 六、和你朋友方案的对应关系
