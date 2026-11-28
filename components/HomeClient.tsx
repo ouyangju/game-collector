@@ -720,8 +720,8 @@ export default function HomeClient() {
           <div className="flex items-center gap-2.5 sm:gap-3">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-lg text-white shadow-card sm:h-10 sm:w-10 sm:text-xl">🎮</div>
             <div>
-              <div className="text-base font-medium leading-tight sm:text-lg">游戏墙</div>
-              <div className="hidden text-[11px] tracking-wide text-muted sm:block">今年玩过的游戏</div>
+              <div className="text-sm font-medium leading-tight sm:text-lg">ZACA单机游戏组官网</div>
+              <div className="hidden text-[11px] tracking-wide text-muted sm:block">记录游戏日常的点点滴滴</div>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2 rounded-full border border-butter-2 bg-white/80 px-3 py-1.5 text-xs shadow-card sm:gap-3 sm:px-4 sm:text-sm">

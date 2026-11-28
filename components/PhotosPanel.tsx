@@ -117,7 +117,14 @@ function PhotoCard({
   );
 }
 
-/** 上传弹窗：多选图片 + 文字说明 */
+/** 待发布图片：本地文件（需上传）或已导入的本站 URL */
+type PendingImage = {
+  preview: string;      // 展示用的图片地址（本地 blob 或同源代理）
+  file?: File;          // 本地文件，发布前需压缩上传
+  url?: string;         // 已转存到本站存储的图片，直接发布
+};
+
+/** 上传弹窗：拖拽 / 选择 / URL 导入 + 文字说明 */
 function UploadDialog({
   onClose, onUploaded,
 }: {
@@ -125,47 +132,91 @@ function UploadDialog({
   onUploaded: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
+  const dragDepth = useRef(0);
+  const [items, setItems] = useState<PendingImage[]>([]);
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [importing, setImporting] = useState(false);
 
-  const pickFiles = (picked: FileList | null) => {
+  const pickFiles = (picked: FileList | File[] | null) => {
     if (!picked) return;
-    const all = [...files];
+    const added: PendingImage[] = [];
+    let error = "";
     for (const f of Array.from(picked)) {
-      if (all.length >= MAX_IMAGES) break;
+      if (items.length + added.length >= MAX_IMAGES) { error = `最多 ${MAX_IMAGES} 张`; break; }
       if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) {
-        setMsg("仅支持 JPG / PNG / WebP 图片");
+        error = "仅支持 JPG / PNG / WebP 图片";
         continue;
       }
       if (f.size > PICK_MAX_BYTES) {
-        setMsg("单张图片不能超过 20MB");
+        error = "单张图片不能超过 20MB";
         continue;
       }
-      all.push(f);
+      added.push({ preview: URL.createObjectURL(f), file: f });
     }
-    setFiles(all);
-    setPreviews(all.map((f) => URL.createObjectURL(f)));
+    if (added.length) setItems((prev) => [...prev, ...added].slice(0, MAX_IMAGES));
+    setMsg(error);
+  };
+
+  const addByUrl = async () => {
+    const url = urlInput.trim();
+    if (!url) { setMsg("请先粘贴图片地址"); return; }
+    if (items.length >= MAX_IMAGES) { setMsg(`最多 ${MAX_IMAGES} 张`); return; }
+    setImporting(true);
     setMsg("");
+    try {
+      const r = await fetch("/api/photos/import-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const j = await parseJsonSafe(r);
+      if (typeof j.url !== "string") throw new Error("图片导入失败");
+      setItems((prev) => [...prev, { preview: proxiedCover(j.url as string) || (j.url as string), url: j.url as string }]);
+      setUrlInput("");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "图片导入失败");
+    } finally {
+      setImporting(false);
+    }
   };
 
   const removeAt = (idx: number) => {
-    const next = files.filter((_, i) => i !== idx);
-    setFiles(next);
-    setPreviews(next.map((f) => URL.createObjectURL(f)));
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const onDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragOver(true);
+  };
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) { dragDepth.current = 0; setDragOver(false); }
+  };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragOver(false);
+    pickFiles(e.dataTransfer.files);
   };
 
   const submit = async () => {
-    if (!files.length) { setMsg("请先选择图片"); return; }
+    if (!items.length) { setMsg("请先添加图片"); return; }
     setBusy(true);
     setMsg("");
     try {
       const urls: string[] = [];
-      for (let i = 0; i < files.length; i++) {
-        setMsg(`正在处理第 ${i + 1}/${files.length} 张图片…`);
-        const prepared = await compressImage(files[i]);
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.url) { urls.push(it.url); continue; }
+        const n = urls.length + 1;
+        setMsg(`正在处理第 ${n}/${items.length} 张图片…`);
+        const prepared = await compressImage(it.file!);
         const fd = new FormData();
         fd.append("file", prepared);
         const r = await fetch("/api/photos/upload", { method: "POST", body: fd });
@@ -178,7 +229,7 @@ function UploadDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: urls, caption }),
       });
-      const j = await parseJsonSafe(r);
+      await parseJsonSafe(r);
       onUploaded();
       onClose();
     } catch (e) {
@@ -190,11 +241,22 @@ function UploadDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-3 backdrop-blur-sm sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-5 shadow-2xl sm:p-6">
+      <div
+        className="relative max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-5 shadow-2xl sm:p-6"
+        onDragEnter={onDragEnter}
+        onDragOver={(e) => e.preventDefault()}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        {dragOver ? (
+          <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl border-2 border-dashed border-primary bg-cream/90 text-lg font-medium text-primary-dark">
+            📥 松开鼠标即可添加图片
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-medium">🖼️ 分享美图</h3>
-            <p className="mt-1 text-xs text-muted">一次可选多张图片，并为它们写点文字</p>
+            <p className="mt-1 text-xs text-muted">拖拽、选择或粘贴图片地址，最多 {MAX_IMAGES} 张</p>
           </div>
           <button type="button" onClick={onClose} aria-label="关闭" className="rounded-lg px-2 py-1 text-muted hover:bg-butter/30 hover:text-ink">✕</button>
         </div>
@@ -208,44 +270,60 @@ function UploadDialog({
           onChange={(e) => { pickFiles(e.target.files); e.target.value = ""; }}
         />
 
-        {previews.length === 0 ? (
+        {items.length === 0 ? (
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="mt-5 grid h-40 w-full place-items-center rounded-xl border-2 border-dashed border-butter-2 bg-cream-2 text-muted transition hover:border-primary hover:text-primary-dark"
+            className="mt-5 grid h-36 w-full place-items-center rounded-xl border-2 border-dashed border-butter-2 bg-cream-2 text-muted transition hover:border-primary hover:text-primary-dark"
           >
             <div className="text-center">
               <div className="text-3xl">📷</div>
-              <div className="mt-1 text-sm">点击选择图片（最多 {MAX_IMAGES} 张）</div>
+              <div className="mt-1 text-sm">点击选择，或把图片拖到这里</div>
               <div className="text-[11px]">JPG / PNG / WebP，单张 ≤ 20MB（自动压缩）</div>
             </div>
           </button>
         ) : (
-          <>
-            <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {previews.map((src, i) => (
-                <div key={i} className="relative aspect-square overflow-hidden rounded-lg border border-butter-2 bg-[#FFF3DA]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt={`预览 ${i + 1}`} className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeAt(i)}
-                    aria-label="移除图片"
-                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-ink/60 text-xs text-white hover:bg-ink/85"
-                  >✕</button>
-                </div>
-              ))}
-              {previews.length < MAX_IMAGES ? (
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {items.map((it, i) => (
+              <div key={i} className="relative aspect-square overflow-hidden rounded-lg border border-butter-2 bg-[#FFF3DA]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={it.preview} alt={`预览 ${i + 1}`} className="h-full w-full object-cover" />
+                {it.url ? <span className="absolute bottom-1 left-1 rounded bg-ink/55 px-1.5 py-0.5 text-[10px] text-white">链接</span> : null}
                 <button
                   type="button"
-                  onClick={() => inputRef.current?.click()}
-                  className="grid aspect-square place-items-center rounded-lg border-2 border-dashed border-butter-2 bg-cream-2 text-2xl text-muted hover:border-primary hover:text-primary-dark"
-                >＋</button>
-              ) : null}
-            </div>
-            <div className="mt-1 text-right text-[11px] text-muted">已选 {previews.length}/{MAX_IMAGES} 张</div>
-          </>
+                  onClick={() => removeAt(i)}
+                  aria-label="移除图片"
+                  className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-ink/60 text-xs text-white hover:bg-ink/85"
+                >✕</button>
+              </div>
+            ))}
+            {items.length < MAX_IMAGES ? (
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="grid aspect-square place-items-center rounded-lg border-2 border-dashed border-butter-2 bg-cream-2 text-2xl text-muted hover:border-primary hover:text-primary-dark"
+              >＋</button>
+            ) : null}
+          </div>
         )}
+        {items.length > 0 ? <div className="mt-1 text-right text-[11px] text-muted">已选 {items.length}/{MAX_IMAGES} 张</div> : null}
+
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-muted">或粘贴图片网址导入</label>
+          <div className="mt-1.5 flex gap-2">
+            <input
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addByUrl(); } }}
+              placeholder="https://example.com/image.jpg"
+              className="input min-w-0 flex-1"
+              disabled={busy || importing}
+            />
+            <button type="button" onClick={() => void addByUrl()} disabled={importing || busy || !urlInput.trim() || items.length >= MAX_IMAGES} className="btn-ghost shrink-0 px-3">
+              {importing ? "导入中…" : "添加图片"}
+            </button>
+          </div>
+        </div>
 
         <label className="mt-4 block text-sm font-medium">为图片写点文字（可选）</label>
         <RichTextEditor
@@ -260,7 +338,7 @@ function UploadDialog({
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="btn-ghost">取消</button>
-          <button type="button" onClick={() => void submit()} disabled={busy || files.length === 0} className="btn disabled:opacity-40">
+          <button type="button" onClick={() => void submit()} disabled={busy || items.length === 0} className="btn disabled:opacity-40">
             {busy ? "发布中…" : "发布分享"}
           </button>
         </div>
@@ -390,7 +468,7 @@ export default function PhotosPanel({ me, admin, onLogin, onOpenProfile }: Props
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-medium">🖼️ 美图分享</h2>
-            <p className="mt-1 text-xs text-muted">分享你拍到的画面，让大家一起看看</p>
+            <p className="mt-1 text-xs text-muted">分享你喜欢的游戏同人图吧</p>
           </div>
           <button
             type="button"

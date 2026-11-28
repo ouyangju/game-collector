@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "游戏墙 · 今年玩过的游戏",
+  title: "ZACA单机游戏组官网 · 记录游戏日常的点点滴滴",
   description: "搜索 Bangumi 游戏、记录游玩感想，和群友分享你的年度游戏清单。",
 };
 
