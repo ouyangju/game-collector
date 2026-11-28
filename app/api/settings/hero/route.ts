@@ -5,7 +5,7 @@ import type { HeroResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 5 * 1024 * 1024;
 
 function sniffExt(buf: Uint8Array): string | null {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpg";
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请选择图片文件" }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "图片不能超过 10MB" }, { status: 400 });
+    return NextResponse.json({ error: "图片不能超过 5MB" }, { status: 400 });
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
   const ext = sniffExt(bytes);

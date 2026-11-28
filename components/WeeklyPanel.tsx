@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import UserAvatar from "./UserAvatar";
 import WeeklyAnswerDialog from "./WeeklyAnswerDialog";
-import ShareImageDialog from "./ShareImageDialog";
 import type { SessionUser, WeeklyAnswer, WeeklyGameInput, WeeklyQuestion } from "@/lib/types";
 import { proxiedCover } from "@/lib/img-proxy";
 
@@ -60,13 +59,12 @@ function GameChip({ title, cover, source }: { title: string; cover: string | nul
   );
 }
 
-function AnswerCard({ answer, me, editable, onEdit, onWithdraw, onShare }: {
+function AnswerCard({ answer, me, editable, onEdit, onWithdraw }: {
   answer: WeeklyAnswer;
   me: SessionUser | null;
   editable: boolean;
   onEdit: () => void;
   onWithdraw: () => void;
-  onShare: () => void;
 }) {
   const isMine = me ? me.id === answer.user_id : false;
   return (
@@ -77,15 +75,12 @@ function AnswerCard({ answer, me, editable, onEdit, onWithdraw, onShare }: {
         {isMine ? <span className="rounded-full bg-butter/40 px-2 py-0.5 text-[11px] text-primary-dark">我</span> : null}
         <span className="shrink-0 text-[11px] text-muted">{formatDeadline(answer.updated_at)}</span>
       </div>
-      <div className="mt-2 flex flex-wrap gap-3 text-[11px]">
-        <button type="button" onClick={onShare} className="text-primary-dark hover:underline">🖼️ 生成分享图</button>
-        {isMine && editable ? (
-          <>
-            <button type="button" onClick={onEdit} className="text-primary-dark hover:underline">修改回答</button>
-            <button type="button" onClick={onWithdraw} className="text-muted hover:text-red-600 hover:underline">撤回</button>
-          </>
-        ) : null}
-      </div>
+      {isMine && editable ? (
+        <div className="mt-2 flex gap-3 text-[11px]">
+          <button type="button" onClick={onEdit} className="text-primary-dark hover:underline">修改回答</button>
+          <button type="button" onClick={onWithdraw} className="text-muted hover:text-red-600 hover:underline">撤回</button>
+        </div>
+      ) : null}
       <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
         {answer.games.map((g) => (
           <GameChip key={g.id} title={g.title} cover={g.cover} source={g.source} />
@@ -95,17 +90,22 @@ function AnswerCard({ answer, me, editable, onEdit, onWithdraw, onShare }: {
   );
 }
 
-function QuestionCard({ q, me, admin, onChanged, onLogin, onAnswer, onShare }: {
+const ANSWERS_PER_PAGE = 10;
+
+function QuestionCard({ q, me, admin, onChanged, onLogin, onAnswer }: {
   q: WeeklyQuestion;
   me: SessionUser | null;
   admin: boolean;
   onChanged: () => void | Promise<void>;
   onLogin: () => void;
   onAnswer: (q: WeeklyQuestion) => void;
-  onShare: (q: WeeklyQuestion, a: WeeklyAnswer) => void;
 }) {
   const active = q.status === "active";
   const mine = q.answers.find((a) => me && a.user_id === me.id);
+  const [answerPage, setAnswerPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(q.answers.length / ANSWERS_PER_PAGE));
+  const safePage = Math.min(answerPage, totalPages);
+  const pageAnswers = q.answers.slice((safePage - 1) * ANSWERS_PER_PAGE, safePage * ANSWERS_PER_PAGE);
 
   const remove = async () => {
     if (!confirm(`确定删除问题「${q.question}」吗？所有回答会一并删除。`)) return;
@@ -157,7 +157,7 @@ function QuestionCard({ q, me, admin, onChanged, onLogin, onAnswer, onShare }: {
       <div className="mt-4 space-y-2 border-t border-butter-2 pt-4">
         {q.answers.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted">还没有人回答，来当第一个吧～</p>
-        ) : q.answers.map((a) => (
+        ) : pageAnswers.map((a) => (
           <AnswerCard
             key={a.id}
             answer={a}
@@ -165,10 +165,17 @@ function QuestionCard({ q, me, admin, onChanged, onLogin, onAnswer, onShare }: {
             editable={active}
             onEdit={() => onAnswer(q)}
             onWithdraw={() => void withdraw()}
-            onShare={() => onShare(q, a)}
           />
         ))}
       </div>
+
+      {q.answers.length > ANSWERS_PER_PAGE ? (
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <button type="button" onClick={() => setAnswerPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="btn-ghost px-3 py-1 text-xs disabled:opacity-40">上一页</button>
+          <span className="text-xs text-muted">{safePage} / {totalPages}（共 {q.answers.length} 个回答）</span>
+          <button type="button" onClick={() => setAnswerPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="btn-ghost px-3 py-1 text-xs disabled:opacity-40">下一页</button>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -257,7 +264,6 @@ export default function WeeklyPanel({ items, me, admin, onChanged, onLogin, onAn
   const [createOpen, setCreateOpen] = useState(false);
   const [pastOpen, setPastOpen] = useState(false);
   const [answerTarget, setAnswerTarget] = useState<WeeklyQuestion | null>(null);
-  const [shareTarget, setShareTarget] = useState<{ q: WeeklyQuestion; a: WeeklyAnswer } | null>(null);
   const [page, setPage] = useState(1);
 
   const active = items.filter((q) => q.status === "active");
@@ -309,7 +315,6 @@ export default function WeeklyPanel({ items, me, admin, onChanged, onLogin, onAn
               onChanged={onChanged}
               onLogin={onLogin}
               onAnswer={setAnswerTarget}
-              onShare={(qq, a) => setShareTarget({ q: qq, a })}
             />
           ))}
         </div>
@@ -357,7 +362,7 @@ export default function WeeklyPanel({ items, me, admin, onChanged, onLogin, onAn
                   ) : (
                     <div className="space-y-2">
                       {q.answers.map((a) => (
-                        <AnswerCard key={a.id} answer={a} me={me} editable={false} onEdit={() => {}} onWithdraw={() => {}} onShare={() => setShareTarget({ q, a })} />
+                        <AnswerCard key={a.id} answer={a} me={me} editable={false} onEdit={() => {}} onWithdraw={() => {}} />
                       ))}
                     </div>
                   )}
@@ -384,15 +389,6 @@ export default function WeeklyPanel({ items, me, admin, onChanged, onLogin, onAn
         />
       ) : null}
 
-      {shareTarget ? (
-        <ShareImageDialog
-          open
-          question={shareTarget.q}
-          answer={shareTarget.a}
-          me={me}
-          onClose={() => setShareTarget(null)}
-        />
-      ) : null}
     </section>
   );
 }

@@ -123,8 +123,8 @@ export async function renderShareImage(data: ShareData): Promise<string> {
   if (!ctx) throw new Error("当前浏览器不支持 Canvas");
   ctx.scale(SCALE, SCALE);
 
-  // 背景
-  ctx.fillStyle = "#FFF8E8";
+  // 背景（纯白）
+  ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = "#FDE3A7";
   ctx.fillRect(0, 0, W, 8);
@@ -204,6 +204,9 @@ export async function renderShareImage(data: ShareData): Promise<string> {
     ctx.fillStyle = "#FFFFFF";
     roundRectPath(ctx, x, y, cellW, cellH, 12);
     ctx.fill();
+    ctx.strokeStyle = "#EED8AA";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
     ctx.save();
     roundRectPath(ctx, x, y, cellW, imgH, 12);

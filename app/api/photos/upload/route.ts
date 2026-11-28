@@ -4,7 +4,7 @@ import { currentUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 5 * 1024 * 1024;
 
 function sniffExt(bytes: Uint8Array): string | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请选择图片文件" }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "单张图片不能超过 10MB" }, { status: 400 });
+    return NextResponse.json({ error: "单张图片不能超过 5MB" }, { status: 400 });
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());

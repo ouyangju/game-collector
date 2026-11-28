@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { compressImage, parseJsonSafe } from "@/lib/client-utils";
 
 type Props = {
   open: boolean;
@@ -45,11 +46,10 @@ export default function CustomGameDialog({ open, onClose, onAdd }: Props) {
       let cover: string | null = null;
       if (file) {
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", await compressImage(file));
         const res = await fetch("/api/games/upload", { method: "POST", body: fd });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "封面上传失败");
-        cover = json.url;
+        const json = await parseJsonSafe(res);
+        cover = typeof json.url === "string" ? json.url : null;
       }
       await onAdd({ title: name, platform: platform.trim(), cover });
       reset();
@@ -88,7 +88,7 @@ export default function CustomGameDialog({ open, onClose, onAdd }: Props) {
             {preview ? (
               <button type="button" onClick={() => { setFile(null); setPreview(null); if (inputRef.current) inputRef.current.value = ""; }} className="text-[11px] text-muted underline hover:text-red-600">移除图片</button>
             ) : (
-              <p className="text-[11px] leading-relaxed text-muted">封面可选。支持 JPG / PNG / WebP，≤10MB。不传则用默认占位图。</p>
+              <p className="text-[11px] leading-relaxed text-muted">封面可选。支持 JPG / PNG / WebP，≤20MB（自动压缩）。不传则用默认占位图。</p>
             )}
           </div>
         </div>

@@ -15,6 +15,7 @@ import RichText, { richTextPreview, richTextToPlain } from "@/lib/richtext";
 import RichTextEditor from "./RichTextEditor";
 import DraftBox from "./DraftBox";
 import PhotosPanel from "./PhotosPanel";
+import ShareImageDialog from "./ShareImageDialog";
 import { draftId, deleteDraft, loadDrafts, saveDraft, type Draft, type DraftKind } from "@/lib/drafts";
 import SiteEditor from "./SiteEditor";
 import CustomGameDialog from "./CustomGameDialog";
@@ -329,6 +330,7 @@ export default function HomeClient() {
   // 周推游戏
   const [weekly, setWeekly] = useState<WeeklyQuestion[]>([]);
   const [weeklyAnswerOpen, setWeeklyAnswerOpen] = useState<WeeklyQuestion | null>(null);
+  const [weeklyShareOpen, setWeeklyShareOpen] = useState(false);
 
   const loadWeekly = useCallback(async () => {
     try {
@@ -799,10 +801,12 @@ export default function HomeClient() {
                 thoughts={mine.filter((e) => e.thoughts?.trim()).length}
                 onEdit={() => setProfileEditorOpen(true)}
                 weekly={weekly.find((q) => q.status === "active") || null}
+                myAnswer={weekly.find((q) => q.status === "active")?.answers.find((a) => a.user_id === me.id) || null}
                 onWeeklyAnswer={() => {
                   const q = weekly.find((x) => x.status === "active");
                   if (q) setWeeklyAnswerOpen(q);
                 }}
+                onShareAnswer={() => setWeeklyShareOpen(true)}
               />
             ) : (
               <section className="card p-5 text-center">
@@ -999,10 +1003,10 @@ export default function HomeClient() {
 
       {editEntry ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditEntry(null); }}>
-          <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-5 shadow-2xl sm:p-7">
+          <div className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-5 shadow-2xl sm:max-w-4xl sm:p-8">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-medium sm:text-xl">写下游玩感想</h3>
+                <h3 className="text-lg font-medium sm:text-2xl">写下游玩感想</h3>
                 <p className="mt-1 text-xs text-muted">{editEntry.title}</p>
               </div>
               <button type="button" onClick={() => setEditEntry(null)} aria-label="关闭" className="rounded-lg px-2 py-1 text-muted hover:bg-butter/30 hover:text-ink">✕</button>
@@ -1014,8 +1018,8 @@ export default function HomeClient() {
               value={editThoughts}
               onChange={setEditThoughts}
               maxLength={2000}
-              rows={9}
-              textareaClassName="min-h-[180px] sm:min-h-[260px] text-sm sm:text-base"
+              rows={12}
+              textareaClassName="min-h-[200px] sm:min-h-[420px] text-sm sm:text-base sm:leading-7"
               placeholder="这款游戏哪里打动了你？通关了吗？选中文字可加粗、加剧透黑框等格式"
             />
             <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -1067,6 +1071,20 @@ export default function HomeClient() {
           onSubmitted={loadWeekly}
         />
       ) : null}
+
+      {weeklyShareOpen && me ? (() => {
+        const q = weekly.find((x) => x.status === "active");
+        const a = q?.answers.find((x) => x.user_id === me.id);
+        return q && a ? (
+          <ShareImageDialog
+            open
+            question={q}
+            answer={a}
+            me={me}
+            onClose={() => setWeeklyShareOpen(false)}
+          />
+        ) : null;
+      })() : null}
 
       <DraftBox
         open={draftBoxOpen}

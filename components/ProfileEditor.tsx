@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import UserAvatar from "./UserAvatar";
+import { compressImage, parseJsonSafe } from "@/lib/client-utils";
 import type { QQInfo, SessionUser } from "@/lib/types";
 
 type Props = {
@@ -63,12 +64,11 @@ export default function ProfileEditor({ me, target, onClose, onSaved }: Props) {
     setMsg("");
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", await compressImage(file));
       const suffix = isSelf ? "" : `?target_user_id=${encodeURIComponent(target!.id)}`;
       const res = await fetch(`/api/profile/avatar${suffix}`, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "上传失败");
-      setAvatar(json.url);
+      const json = await parseJsonSafe(res);
+      setAvatar(typeof json.url === "string" ? json.url : "");
       setMsg("头像已上传，点「保存」生效 ✅");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "上传失败");

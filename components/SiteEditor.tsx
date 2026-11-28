@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { Announcement, HeroImage } from "@/lib/types";
 import { proxiedCover } from "@/lib/img-proxy";
+import { compressImage, parseJsonSafe } from "@/lib/client-utils";
 
 type Props = {
   open: boolean;
@@ -32,10 +33,9 @@ export default function SiteEditor({ open, onClose, heroes, announcements, archi
     setBusy(true); setMsg("");
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", await compressImage(file));
       const res = await fetch("/api/settings/hero", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "上传失败");
+      await parseJsonSafe(res);
       await onChanged();
       setMsg("头图已添加 ✅");
     } catch (e) { fail(e); }
@@ -164,7 +164,7 @@ export default function SiteEditor({ open, onClose, heroes, announcements, archi
             </div>
             <input ref={heroInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadHero(f); }} />
             <button type="button" onClick={() => heroInputRef.current?.click()} disabled={busy} className="btn-ghost mt-3 w-full">
-              {busy ? "处理中…" : "📷 上传头图（JPG/PNG/WebP，≤10MB）"}
+              {busy ? "处理中…" : "📷 上传头图（JPG/PNG/WebP，≤20MB，自动压缩）"}
             </button>
           </div>
         ) : (

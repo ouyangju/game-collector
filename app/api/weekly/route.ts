@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
   let games: GameRow[] = [];
   if (questions.length) {
     const [{ data: aData }, { data: gData }] = await Promise.all([
-      sb.from("weekly_answers").select("*"),
+      sb.from("weekly_answers").select("*").order("created_at", { ascending: false }),
       sb.from("weekly_answer_games").select("*").order("position", { ascending: true }),
     ]);
     answers = (aData || []) as AnswerRow[];

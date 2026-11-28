@@ -6,6 +6,7 @@ import { proxiedCover } from "@/lib/img-proxy";
 import RichText from "@/lib/richtext";
 import RichTextEditor from "./RichTextEditor";
 import UserAvatar from "./UserAvatar";
+import { compressImage, parseJsonSafe, PICK_MAX_BYTES } from "@/lib/client-utils";
 
 type Props = {
   me: SessionUser | null;
@@ -139,8 +140,8 @@ function UploadDialog({
         setMsg("仅支持 JPG / PNG / WebP 图片");
         continue;
       }
-      if (f.size > 10 * 1024 * 1024) {
-        setMsg("单张图片不能超过 10MB");
+      if (f.size > PICK_MAX_BYTES) {
+        setMsg("单张图片不能超过 20MB");
         continue;
       }
       all.push(f);
@@ -162,12 +163,14 @@ function UploadDialog({
     setMsg("");
     try {
       const urls: string[] = [];
-      for (const file of files) {
+      for (let i = 0; i < files.length; i++) {
+        setMsg(`正在处理第 ${i + 1}/${files.length} 张图片…`);
+        const prepared = await compressImage(files[i]);
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", prepared);
         const r = await fetch("/api/photos/upload", { method: "POST", body: fd });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error || "图片上传失败");
+        const j = await parseJsonSafe(r);
+        if (typeof j.url !== "string") throw new Error("图片上传失败");
         urls.push(j.url);
       }
       const r = await fetch("/api/photos", {
@@ -175,8 +178,7 @@ function UploadDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: urls, caption }),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "发布失败");
+      const j = await parseJsonSafe(r);
       onUploaded();
       onClose();
     } catch (e) {
@@ -215,7 +217,7 @@ function UploadDialog({
             <div className="text-center">
               <div className="text-3xl">📷</div>
               <div className="mt-1 text-sm">点击选择图片（最多 {MAX_IMAGES} 张）</div>
-              <div className="text-[11px]">JPG / PNG / WebP，单张 ≤ 10MB</div>
+              <div className="text-[11px]">JPG / PNG / WebP，单张 ≤ 20MB（自动压缩）</div>
             </div>
           </button>
         ) : (
@@ -286,8 +288,8 @@ function EditDialog({ photo, onClose, onSaved }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: photo.id, caption }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "保存失败");
+      const json = await parseJsonSafe(res);
+      if (!json.ok) throw new Error("保存失败");
       onSaved();
       onClose();
     } catch (e) {
