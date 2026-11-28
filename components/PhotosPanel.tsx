@@ -48,16 +48,18 @@ function PhotoImg({ src, className }: { src: string; className?: string }) {
 
 /** 一条分享卡片 */
 function PhotoCard({
-  photo, me, admin, onLike, onDelete, onOpenProfile,
+  photo, me, admin, onLike, onDelete, onEdit, onOpenProfile,
 }: {
   photo: Photo;
   me: SessionUser | null;
   admin: boolean;
   onLike: (p: Photo) => void;
   onDelete: (p: Photo) => void;
+  onEdit: (p: Photo) => void;
   onOpenProfile: (userId: string) => void;
 }) {
   const count = photo.images.length;
+  const isMine = me ? me.id === photo.user_id : false;
   const gridClass = count === 1
     ? "grid-cols-1"
     : count === 2
@@ -75,9 +77,14 @@ function PhotoCard({
           </button>
           <div className="text-[11px] text-muted">{timeLabel(photo.created_at)} · {count} 张图片</div>
         </div>
-        {admin ? (
-          <button type="button" onClick={() => onDelete(photo)} className="shrink-0 rounded-lg px-2 py-1 text-xs text-muted hover:bg-red-50 hover:text-red-600">删除</button>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1">
+          {isMine || admin ? (
+            <button type="button" onClick={() => onEdit(photo)} className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-butter/30 hover:text-primary-dark">编辑</button>
+          ) : null}
+          {admin ? (
+            <button type="button" onClick={() => onDelete(photo)} className="rounded-lg px-2 py-1 text-xs text-muted hover:bg-red-50 hover:text-red-600">删除</button>
+          ) : null}
+        </div>
       </div>
 
       {/* 图片网格 */}
@@ -260,6 +267,65 @@ function UploadDialog({
   );
 }
 
+/** 编辑自己分享的文字说明 */
+function EditDialog({ photo, onClose, onSaved }: {
+  photo: Photo;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [caption, setCaption] = useState(photo.caption);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/photos", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: photo.id, caption }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "保存失败");
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-3 backdrop-blur-sm sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-2xl border border-butter-2 bg-cream p-5 shadow-2xl sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-medium">编辑分享文字</h3>
+            <p className="mt-1 text-xs text-muted">{photo.owner_name} · {timeLabel(photo.created_at)}（图片不可更改）</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="关闭" className="rounded-lg px-2 py-1 text-muted hover:bg-butter/30 hover:text-ink">✕</button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+          {photo.images.slice(0, 8).map((url, i) => <PhotoImg key={i} src={url} className="aspect-square w-full rounded-lg" />)}
+        </div>
+
+        <label className="mt-4 block text-sm font-medium">文字说明</label>
+        <RichTextEditor value={caption} onChange={setCaption} maxLength={2000} rows={4} placeholder="为这组图片写点文字…" />
+
+        {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn-ghost">取消</button>
+          <button type="button" onClick={() => void save()} disabled={busy} className="btn disabled:opacity-40">{busy ? "保存中…" : "保存"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PhotosPanel({ me, admin, onLogin, onOpenProfile }: Props) {
   const [data, setData] = useState<PhotosResponse | null>(null);
   const [page, setPage] = useState(1);
@@ -267,6 +333,7 @@ export default function PhotosPanel({ me, admin, onLogin, onOpenProfile }: Props
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Photo | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -367,6 +434,7 @@ export default function PhotosPanel({ me, admin, onLogin, onOpenProfile }: Props
               admin={admin}
               onLike={(x) => void onLike(x)}
               onDelete={(x) => void onDelete(x)}
+              onEdit={setEditTarget}
               onOpenProfile={onOpenProfile}
             />
           ))}
@@ -384,6 +452,14 @@ export default function PhotosPanel({ me, admin, onLogin, onOpenProfile }: Props
 
       {uploadOpen ? (
         <UploadDialog onClose={() => setUploadOpen(false)} onUploaded={() => { setPage(1); setDate(""); void load(); }} />
+      ) : null}
+
+      {editTarget ? (
+        <EditDialog
+          photo={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => void load()}
+        />
       ) : null}
     </div>
   );

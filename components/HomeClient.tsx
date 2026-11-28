@@ -11,7 +11,7 @@ import HeroSection from "./HeroSection";
 import WeeklyPanel from "./WeeklyPanel";
 import WeeklyAnswerDialog from "./WeeklyAnswerDialog";
 import { proxiedCover } from "@/lib/img-proxy";
-import RichText, { richTextToPlain } from "@/lib/richtext";
+import RichText, { richTextPreview, richTextToPlain } from "@/lib/richtext";
 import RichTextEditor from "./RichTextEditor";
 import DraftBox from "./DraftBox";
 import PhotosPanel from "./PhotosPanel";
@@ -52,6 +52,29 @@ function Stars({ value, onChange }: { value: number | null; onChange?: (n: numbe
         )
       )}
     </span>
+  );
+}
+
+/** 长感想默认折叠：纯文本超过 100 字时只显示前 100 字，点开看全文（富文本渲染） */
+function FoldableThoughts({ text, className = "" }: { text: string; className?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const plain = richTextToPlain(text);
+  const long = plain.length > 100;
+  const preview = long ? richTextPreview(text, 100) + "…" : null;
+
+  return (
+    <div className={`thought-box ${className}`}>
+      {long && !expanded ? (
+        <span>{preview}</span>
+      ) : (
+        <RichText text={text} />
+      )}
+      {long ? (
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="ml-1 text-xs text-primary-dark underline hover:no-underline">
+          {expanded ? "收起" : "展开全文"}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -165,9 +188,10 @@ function PostCard({
       </div>
 
       {entry.thoughts ? (
-        <div className="thought-box mt-3 rounded-lg bg-cream-2 p-2.5 text-sm leading-relaxed text-ink">
-          <RichText text={entry.thoughts} />
-        </div>
+        <FoldableThoughts
+          text={entry.thoughts}
+          className="mt-3 rounded-lg bg-cream-2 p-2.5 text-sm leading-relaxed text-ink"
+        />
       ) : null}
 
       {/* 默认展示第一条评论（未展开评论区时） */}
@@ -296,6 +320,7 @@ export default function HomeClient() {
   const [squareQuery, setSquareQuery] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("time");
+  const [squarePage, setSquarePage] = useState(1);
 
   const [openComments, setOpenComments] = useState<number | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<number, Comment[]>>({});
@@ -642,6 +667,7 @@ export default function HomeClient() {
       setTab("square");
       setSquareQuery("");
       setMonthFilter(monthKey(e.created_at));
+      setSquarePage(1);
       setOpenComments(e.id);
       if (!commentsMap[e.id]) void loadComments(e.id);
       setCommentPrefill({ entryId: e.id, content: d.content, nonce: Date.now() });
@@ -673,6 +699,11 @@ export default function HomeClient() {
       : b.created_at.localeCompare(a.created_at));
     return list;
   }, [entries, squareQuery, effectiveMonth, sortBy]);
+
+  const SQUARE_PAGE_SIZE = 8;
+  const squareTotalPages = Math.max(1, Math.ceil(squarePosts.length / SQUARE_PAGE_SIZE));
+  const safeSquarePage = Math.min(squarePage, squareTotalPages);
+  const squarePagePosts = squarePosts.slice((safeSquarePage - 1) * SQUARE_PAGE_SIZE, safeSquarePage * SQUARE_PAGE_SIZE);
 
   const stats = useMemo(() => ({
     games: entries.length,
@@ -860,8 +891,8 @@ export default function HomeClient() {
             </div>
 
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-              <input value={squareQuery} onChange={(e) => setSquareQuery(e.target.value)} placeholder="搜索游戏名、群友或感想…" className="input w-full sm:min-w-[200px] sm:flex-1" />
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} className="input w-full sm:w-auto" title="排序方式">
+              <input value={squareQuery} onChange={(e) => { setSquareQuery(e.target.value); setSquarePage(1); }} placeholder="搜索游戏名、群友或感想…" className="input w-full sm:min-w-[200px] sm:flex-1" />
+              <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as SortBy); setSquarePage(1); }} className="input w-full sm:w-auto" title="排序方式">
                 <option value="time">按发布时间</option>
                 <option value="likes">按点赞数量</option>
               </select>
@@ -874,7 +905,7 @@ export default function HomeClient() {
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setMonthFilter(m)}
+                  onClick={() => { setMonthFilter(m); setSquarePage(1); }}
                   className={`shrink-0 rounded-full px-3 py-1.5 text-xs transition ${effectiveMonth === m ? "bg-primary text-white shadow-card" : "bg-cream-2 text-muted hover:text-primary-dark"}`}
                 >
                   {monthLabel(m)}
@@ -891,7 +922,7 @@ export default function HomeClient() {
               </div>
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
-                {squarePosts.map((e) => (
+                {squarePagePosts.map((e) => (
                   <PostCard
                     key={e.id}
                     entry={e}
@@ -916,6 +947,14 @@ export default function HomeClient() {
                 ))}
               </div>
             )}
+
+            {!loading && !authLoading && squarePosts.length > SQUARE_PAGE_SIZE ? (
+              <div className="mt-5 flex items-center justify-center gap-2">
+                <button type="button" onClick={() => { setSquarePage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }} disabled={safeSquarePage <= 1} className="btn-ghost px-3 py-1.5 text-xs disabled:opacity-40">上一页</button>
+                <span className="text-sm text-muted">{safeSquarePage} / {squareTotalPages}</span>
+                <button type="button" onClick={() => { setSquarePage((p) => Math.min(squareTotalPages, p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }} disabled={safeSquarePage >= squareTotalPages} className="btn-ghost px-3 py-1.5 text-xs disabled:opacity-40">下一页</button>
+              </div>
+            ) : null}
           </section>
         )}
 

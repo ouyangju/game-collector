@@ -168,6 +168,23 @@ export default function RichText({ text, className = "" }: { text: string | null
   );
 }
 
+/** 折叠预览：去格式、剧透内容替换为占位（避免预览泄露剧透）、取前 maxChars 字 */
+export function richTextPreview(text: string | null | undefined, maxChars = 100): string {
+  if (!text) return "";
+  return text
+    .replace(/\|\|[\s\S]*?\|\|/g, "（剧透）")
+    .replace(/\*\*([\s\S]+?)\*\*/g, "$1")
+    .replace(/__([\s\S]+?)__/g, "$1")
+    .replace(/~~([\s\S]+?)~~/g, "$1")
+    .replace(/`([^`\n]+)`/g, "$1")
+    .replace(/\[([^\]\n]+)\]\((?:https?:\/\/)[^\s)]+\)/g, "$1")
+    .replace(/\*([^*\n]+)\*/g, "$1")
+    .replace(/^> /gm, "")
+    .replace(/^- /gm, "")
+    .trim()
+    .slice(0, maxChars);
+}
+
 /** 去掉标记取纯文本（用于搜索、摘要等场景） */
 export function richTextToPlain(text: string | null | undefined): string {
   if (!text) return "";

@@ -138,6 +138,33 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ item: { id: (data as { id: number }).id } });
 }
 
+// PATCH /api/photos —— 编辑自己分享的文字说明（管理员可编辑任意）
+export async function PATCH(req: NextRequest) {
+  const user = await currentUser(req);
+  if (!user) return NextResponse.json({ error: "请先登录" }, { status: 401 });
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
+  }
+  const id = Number(body.id);
+  if (!id) return NextResponse.json({ error: "参数无效" }, { status: 400 });
+
+  const sb = supabaseServer();
+  const { data: photo } = await sb.from("photos").select("user_id").eq("id", id).maybeSingle();
+  if (!photo) return NextResponse.json({ error: "分享不存在" }, { status: 404 });
+  if (user.role !== "admin" && (photo as { user_id: string }).user_id !== user.id) {
+    return NextResponse.json({ error: "只能编辑自己的分享" }, { status: 403 });
+  }
+
+  const caption = String(body.caption || "").trim().slice(0, 2000);
+  const { error } = await sb.from("photos").update({ caption }).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 // DELETE /api/photos?id=... —— 仅管理员可删除
 export async function DELETE(req: NextRequest) {
   const user = await currentUser(req);
